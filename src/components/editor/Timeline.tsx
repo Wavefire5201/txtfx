@@ -2,6 +2,7 @@
 
 import { useEditorStore } from "@/lib/store";
 import { EFFECT_LABELS } from "@/engine/effects";
+import { SkipBack, Play, Pause, SkipForward } from "@phosphor-icons/react";
 
 export function Timeline() {
   const scene = useEditorStore((s) => s.scene);
@@ -22,15 +23,17 @@ export function Timeline() {
     <div className="timeline">
       <div className="timeline-controls">
         <button className="timeline-btn" onClick={() => setPlaying(false)}>
-          \u23EE
+          <SkipBack size={14} weight="fill" />
         </button>
         <button
           className="timeline-btn timeline-btn-play"
           onClick={() => setPlaying(!playing)}
         >
-          {playing ? "\u23F8" : "\u25B6"}
+          {playing ? <Pause size={16} weight="fill" /> : <Play size={16} weight="fill" />}
         </button>
-        <button className="timeline-btn">\u23ED</button>
+        <button className="timeline-btn">
+          <SkipForward size={14} weight="fill" />
+        </button>
         <span className="toolbar-sep">|</span>
         <span className="timeline-time">
           {formatTime(currentTime)} / {formatTime(duration)}
@@ -40,7 +43,7 @@ export function Timeline() {
           {scene.playback.fps} fps
         </span>
         <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-          Loop {scene.playback.loop ? "\u221E" : "1x"}
+          {scene.playback.loop ? "Loop" : "Once"}
         </span>
       </div>
 
@@ -53,7 +56,7 @@ export function Timeline() {
                 key={fx.id}
                 className={`timeline-label ${!fx.enabled ? "timeline-label--disabled" : ""}`}
               >
-                {meta.icon} {meta.label}
+                {meta.label}
               </div>
             );
           })}

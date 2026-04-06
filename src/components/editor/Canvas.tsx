@@ -6,6 +6,7 @@ import { measureGrid, imageToAscii, sampleMeanColor } from "@/engine/ascii";
 import { createEffect } from "@/engine/effects";
 import { compositeFrame, type ActiveEffect } from "@/engine/renderer";
 import type { GridInfo, MaskGrid } from "@/engine/effects/types";
+import { ImageSquare } from "@phosphor-icons/react";
 
 const EMPTY_MASK: MaskGrid = { get: () => 1 };
 
@@ -154,7 +155,7 @@ export function Canvas() {
     <div className="viewport" ref={containerRef}>
       {!imageUrl ? (
         <div className="upload-overlay" onClick={() => fileRef.current?.click()}>
-          <div className="upload-overlay-icon">\uD83D\uDDBC</div>
+          <ImageSquare size={48} weight="thin" className="upload-overlay-icon" />
           <div className="upload-overlay-text">Click to upload an image</div>
           <input ref={fileRef} type="file" accept="image/*" hidden onChange={handleFile} />
         </div>
@@ -220,9 +221,9 @@ export function Canvas() {
         <div className="viewport-info">
           <span>100%</span>
           <span className="viewport-info-sep">|</span>
-          <span>{imgSize.w} × {imgSize.h}</span>
+          <span>{imgSize.w} x {imgSize.h}</span>
           <span className="viewport-info-sep">|</span>
-          <span>{grid.cols} × {grid.rows} chars</span>
+          <span>{grid.cols} x {grid.rows} chars</span>
         </div>
       )}
     </div>

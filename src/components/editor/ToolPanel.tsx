@@ -2,6 +2,7 @@
 
 import * as Slider from "@radix-ui/react-slider";
 import { useEditorStore } from "@/lib/store";
+import { PaintBrush, MagicWand, Selection, Hand, Eye, EyeSlash } from "@phosphor-icons/react";
 
 export function ToolPanel() {
   const activeTool = useEditorStore((s) => s.activeTool);
@@ -16,10 +17,10 @@ export function ToolPanel() {
   const toggleLayer = useEditorStore((s) => s.toggleLayer);
 
   const tools = [
-    { id: "brush-fg" as const, icon: "\uD83D\uDD8C\uFE0F", title: "Paint foreground" },
-    { id: "brush-bg" as const, icon: "\uD83E\uDE84", title: "Paint background" },
-    { id: "select" as const, icon: "\u2B1C", title: "Select" },
-    { id: "pan" as const, icon: "\u270B", title: "Pan" },
+    { id: "brush-fg" as const, icon: <PaintBrush size={16} />, title: "Paint foreground" },
+    { id: "brush-bg" as const, icon: <MagicWand size={16} />, title: "Paint background" },
+    { id: "select" as const, icon: <Selection size={16} />, title: "Select" },
+    { id: "pan" as const, icon: <Hand size={16} />, title: "Pan" },
   ];
 
   return (
@@ -94,30 +95,25 @@ export function ToolPanel() {
 
       <div className="panel-section">
         <div className="panel-label">Layers</div>
-        <div
-          className={`layer-item ${showEffects ? "layer-item--active" : ""}`}
-          onClick={() => toggleLayer("effects")}
-        >
-          <span>{showEffects ? "\u2728" : "\u2B1C"} Effects</span>
-          <button className="layer-vis">{showEffects ? "\uD83D\uDC41" : "\u2014"}</button>
-        </div>
-        <div
-          className={`layer-item ${showMask ? "layer-item--active" : ""}`}
-          onClick={() => toggleLayer("mask")}
-        >
-          <span>{showMask ? "\u25D0" : "\u2B1C"} Mask</span>
-          <button className="layer-vis">{showMask ? "\uD83D\uDC41" : "\u2014"}</button>
-        </div>
-        <div
-          className={`layer-item ${showAscii ? "layer-item--active" : ""}`}
-          onClick={() => toggleLayer("ascii")}
-        >
-          <span>{showAscii ? "\u25A4" : "\u2B1C"} ASCII Grid</span>
-          <button className="layer-vis">{showAscii ? "\uD83D\uDC41" : "\u2014"}</button>
-        </div>
+        {[
+          { key: "effects" as const, label: "Effects", active: showEffects },
+          { key: "mask" as const, label: "Mask", active: showMask },
+          { key: "ascii" as const, label: "ASCII Grid", active: showAscii },
+        ].map((layer) => (
+          <div
+            key={layer.key}
+            className={`layer-item ${layer.active ? "layer-item--active" : ""}`}
+            onClick={() => toggleLayer(layer.key)}
+          >
+            <span>{layer.label}</span>
+            <button className="layer-vis">
+              {layer.active ? <Eye size={14} /> : <EyeSlash size={14} />}
+            </button>
+          </div>
+        ))}
         <div className="layer-item layer-item--active">
-          <span>\uD83D\uDDBC Source Image</span>
-          <button className="layer-vis">\uD83D\uDC41</button>
+          <span>Source Image</span>
+          <button className="layer-vis"><Eye size={14} /></button>
         </div>
       </div>
     </div>

@@ -61,7 +61,7 @@ export function PropertiesPanel() {
             <div key={fx.id} className="effect-card">
               <div className="effect-card-header">
                 <span style={{ color: fx.enabled ? "var(--text-bright)" : "var(--text-dim)" }}>
-                  {meta.icon} {meta.label}
+                  {meta.label}
                 </span>
                 <Switch.Root
                   className="switch-root"
@@ -106,35 +106,32 @@ export function PropertiesPanel() {
           );
         })}
 
-        <div style={{ position: "relative" }}>
-          <select
-            className="effect-add"
-            value=""
-            onChange={(e) => {
-              if (e.target.value) addEffect(e.target.value as EffectType);
-              e.target.value = "";
-            }}
-            style={{
-              width: "100%",
-              background: "var(--bg-toolbar)",
-              color: "var(--text-muted)",
-              border: "1px dashed var(--text-muted)",
-              borderRadius: "var(--radius)",
-              padding: "8px",
-              fontSize: "11px",
-              cursor: "pointer",
-              appearance: "none",
-              textAlign: "center",
-            }}
-          >
-            <option value="">+ Add Effect</option>
-            {ALL_EFFECT_TYPES.map((type) => (
-              <option key={type} value={type}>
-                {EFFECT_LABELS[type].icon} {EFFECT_LABELS[type].label}
-              </option>
-            ))}
-          </select>
-        </div>
+        <select
+          value=""
+          onChange={(e) => {
+            if (e.target.value) addEffect(e.target.value as EffectType);
+            e.target.value = "";
+          }}
+          style={{
+            width: "100%",
+            background: "var(--bg-toolbar)",
+            color: "var(--text-muted)",
+            border: "1px dashed var(--text-muted)",
+            borderRadius: "var(--radius)",
+            padding: "8px",
+            fontSize: "11px",
+            cursor: "pointer",
+            appearance: "none",
+            textAlign: "center",
+          }}
+        >
+          <option value="">+ Add Effect</option>
+          {ALL_EFFECT_TYPES.map((type) => (
+            <option key={type} value={type}>
+              {EFFECT_LABELS[type].label}
+            </option>
+          ))}
+        </select>
       </div>
     </div>
   );
