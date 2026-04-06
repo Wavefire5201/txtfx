@@ -6,7 +6,7 @@ import { measureGrid, imageToAscii, sampleMeanColor } from "@/engine/ascii";
 import { createEffect } from "@/engine/effects";
 import { compositeFrame, type ActiveEffect } from "@/engine/renderer";
 import type { GridInfo, MaskGrid } from "@/engine/effects/types";
-import { ImageSquare } from "@phosphor-icons/react";
+import { ImageSquare, UploadSimple } from "@phosphor-icons/react";
 import type { WavesEffect } from "@/engine/effects/waves";
 import type { TypewriterEffect } from "@/engine/effects/typewriter";
 import type { DecodeEffect } from "@/engine/effects/decode";
@@ -17,6 +17,7 @@ export function Canvas() {
   const containerRef = useRef<HTMLDivElement>(null);
   const asciiRef = useRef<HTMLPreElement>(null);
   const sparkleRef = useRef<HTMLPreElement>(null);
+  const maskOverlayRef = useRef<HTMLCanvasElement>(null);
   const bgRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -25,11 +26,21 @@ export function Canvas() {
   const scene = useEditorStore((s) => s.scene);
   const showAscii = useEditorStore((s) => s.showAscii);
   const showEffects = useEditorStore((s) => s.showEffects);
+  const showMask = useEditorStore((s) => s.showMask);
   const playing = useEditorStore((s) => s.playing);
   const setPlaying = useEditorStore((s) => s.setPlaying);
+  const setCurrentTime = useEditorStore((s) => s.setCurrentTime);
+  const activeTool = useEditorStore((s) => s.activeTool);
+  const brushSize = useEditorStore((s) => s.brushSize);
+  const maskFeather = useEditorStore((s) => s.maskFeather);
+  const mask = useEditorStore((s) => s.mask);
+  const initMask = useEditorStore((s) => s.initMask);
+  const maskVersion = useEditorStore((s) => s.maskVersion);
+  const bumpMaskVersion = useEditorStore((s) => s.bumpMaskVersion);
 
   const [grid, setGrid] = useState<GridInfo>({ cols: 0, rows: 0, charW: 0, charH: 0, fontSize: 0 });
   const [imgSize, setImgSize] = useState({ w: 0, h: 0 });
+  const [draggingOver, setDraggingOver] = useState(false);
 
   const imgRef = useRef<HTMLImageElement | null>(null);
   const effectsRef = useRef<ActiveEffect[]>([]);
@@ -37,6 +48,8 @@ export function Canvas() {
   const animRef = useRef<number>(0);
   const startTimeRef = useRef(0);
   const lastTimeRef = useRef(0);
+  const isPaintingRef = useRef(false);
+  const maskGridRef = useRef<MaskGrid>(EMPTY_MASK);
 
   // Load image
   useEffect(() => {
@@ -46,6 +59,12 @@ export function Canvas() {
     img.onload = () => {
       imgRef.current = img;
       setImgSize({ w: img.naturalWidth, h: img.naturalHeight });
+
+      // Initialize mask if needed
+      const store = useEditorStore.getState();
+      if (!store.mask || store.mask.width !== img.naturalWidth || store.mask.height !== img.naturalHeight) {
+        initMask(img.naturalWidth, img.naturalHeight);
+      }
 
       if (bgRef.current) {
         bgRef.current.style.backgroundImage = `url("${imageUrl}")`;
@@ -83,7 +102,6 @@ export function Canvas() {
         loop: cfg.timeline.loop,
       };
     });
-    // Feed base text to newly created effects
     if (asciiTextRef.current) {
       feedBaseText(effectsRef.current, asciiTextRef.current);
     }
@@ -101,7 +119,6 @@ export function Canvas() {
     pre.textContent = text;
     asciiTextRef.current = text;
 
-    // Re-init effects with new grid, preserving their params from scene config
     const configs = scene.effects;
     for (let i = 0; i < effectsRef.current.length && i < configs.length; i++) {
       effectsRef.current[i].instance.init(g, configs[i].params);
@@ -119,6 +136,61 @@ export function Canvas() {
     return () => obs.disconnect();
   }, [regenerate]);
 
+  // Build mask grid when mask changes
+  useEffect(() => {
+    const m = useEditorStore.getState().mask;
+    if (m && grid.cols > 0 && imgSize.w > 0) {
+      maskGridRef.current = m.toGrid(grid, imgSize.w, imgSize.h);
+    }
+  }, [maskVersion, grid, imgSize]);
+
+  // Draw mask overlay
+  useEffect(() => {
+    if (!showMask || !maskOverlayRef.current) return;
+    const canvas = maskOverlayRef.current;
+    const container = containerRef.current;
+    if (!container) return;
+
+    const rect = container.getBoundingClientRect();
+    canvas.width = rect.width;
+    canvas.height = rect.height;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const m = useEditorStore.getState().mask;
+    if (!m) {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      return;
+    }
+
+    const imgData = ctx.createImageData(canvas.width, canvas.height);
+    const scaleX = m.width / canvas.width;
+    const scaleY = m.height / canvas.height;
+
+    for (let y = 0; y < canvas.height; y++) {
+      for (let x = 0; x < canvas.width; x++) {
+        const mx = Math.floor(x * scaleX);
+        const my = Math.floor(y * scaleY);
+        const val = m.get(mx, my);
+        const idx = (y * canvas.width + x) * 4;
+        if (val < 128) {
+          // Foreground - tint green
+          imgData.data[idx] = 125;
+          imgData.data[idx + 1] = 239;
+          imgData.data[idx + 2] = 160;
+          imgData.data[idx + 3] = Math.floor((1 - val / 128) * 80);
+        } else {
+          imgData.data[idx] = 0;
+          imgData.data[idx + 1] = 0;
+          imgData.data[idx + 2] = 0;
+          imgData.data[idx + 3] = 0;
+        }
+      }
+    }
+    ctx.putImageData(imgData, 0, 0);
+  }, [showMask, maskVersion, imgSize]);
+
   // Animation loop
   useEffect(() => {
     if (!playing || !showEffects) {
@@ -129,24 +201,42 @@ export function Canvas() {
     startTimeRef.current = performance.now();
     lastTimeRef.current = 0;
 
-    function loop() {
-      const now = (performance.now() - startTimeRef.current) / 1000;
+    const duration = scene.playback.duration;
+    const loop = scene.playback.loop;
+
+    function tick() {
+      const elapsed = (performance.now() - startTimeRef.current) / 1000;
+      let now = elapsed;
+      if (loop && duration > 0) {
+        now = elapsed % duration;
+      } else if (now > duration) {
+        useEditorStore.getState().setPlaying(false);
+        return;
+      }
       const dt = Math.min(0.05, now - lastTimeRef.current);
-      lastTimeRef.current = now;
+      if (dt < 0) {
+        // Wrapped around in loop
+        lastTimeRef.current = 0;
+      } else {
+        lastTimeRef.current = now;
+      }
+
+      setCurrentTime(now);
 
       if (grid.cols > 0 && sparkleRef.current) {
-        const overlay = compositeFrame(effectsRef.current, dt, now, EMPTY_MASK, grid);
+        const currentMask = maskGridRef.current;
+        const overlay = compositeFrame(effectsRef.current, Math.abs(dt), now, currentMask, grid);
         sparkleRef.current.textContent = overlay;
       }
 
-      animRef.current = requestAnimationFrame(loop);
+      animRef.current = requestAnimationFrame(tick);
     }
 
-    animRef.current = requestAnimationFrame(loop);
+    animRef.current = requestAnimationFrame(tick);
     return () => {
       if (animRef.current) cancelAnimationFrame(animRef.current);
     };
-  }, [playing, showEffects, grid]);
+  }, [playing, showEffects, grid, scene.playback.duration, scene.playback.loop]);
 
   // Auto-play when effects are added
   useEffect(() => {
@@ -155,10 +245,75 @@ export function Canvas() {
     }
   }, [scene.effects.length, imageUrl]);
 
+  // Mask painting
+  function getMaskCoords(e: React.MouseEvent): { x: number; y: number } | null {
+    const container = containerRef.current;
+    if (!container || !imgRef.current) return null;
+    const rect = container.getBoundingClientRect();
+    const relX = (e.clientX - rect.left) / rect.width;
+    const relY = (e.clientY - rect.top) / rect.height;
+    return {
+      x: Math.floor(relX * imgSize.w),
+      y: Math.floor(relY * imgSize.h),
+    };
+  }
+
+  function paintAt(e: React.MouseEvent) {
+    const m = useEditorStore.getState().mask;
+    if (!m) return;
+    const coords = getMaskCoords(e);
+    if (!coords) return;
+    const value = activeTool === "brush-fg" ? 0 : 255;
+    const scaledBrush = Math.floor(brushSize * (imgSize.w / (containerRef.current?.getBoundingClientRect().width || 1)));
+    m.paintBrush(coords.x, coords.y, scaledBrush, value, maskFeather);
+    bumpMaskVersion();
+  }
+
+  function handlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    if (activeTool !== "brush-fg" && activeTool !== "brush-bg") return;
+    isPaintingRef.current = true;
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+    paintAt(e);
+  }
+
+  function handlePointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (!isPaintingRef.current) return;
+    paintAt(e);
+  }
+
+  function handlePointerUp() {
+    isPaintingRef.current = false;
+  }
+
+  // Drag and drop
+  function handleDragOver(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setDraggingOver(true);
+  }
+
+  function handleDragLeave(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setDraggingOver(false);
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+    setDraggingOver(false);
+
+    const file = e.dataTransfer.files?.[0];
+    if (!file || !file.type.startsWith("image/")) return;
+    const reader = new FileReader();
+    reader.onload = () => setImageUrl(reader.result as string);
+    reader.readAsDataURL(file);
+  }
+
   const fontSize = scene.ascii.fontSize;
   const fontFamily = scene.ascii.fontFamily;
 
-  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleFileInput(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
@@ -174,18 +329,39 @@ export function Canvas() {
     letterSpacing: scene.ascii.letterSpacing,
   };
 
+  const isBrushTool = activeTool === "brush-fg" || activeTool === "brush-bg";
+
   return (
-    <div className="viewport" ref={containerRef}>
+    <div
+      className="viewport"
+      ref={containerRef}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+      style={{ cursor: isBrushTool ? "crosshair" : undefined }}
+    >
+      {draggingOver && (
+        <div className="drop-overlay">
+          <UploadSimple size={48} weight="thin" />
+          <div className="drop-overlay-text">Drop image here</div>
+        </div>
+      )}
+
       {!imageUrl ? (
         <div className="upload-overlay" onClick={() => fileRef.current?.click()}>
           <ImageSquare size={48} weight="thin" className="upload-overlay-icon" />
-          <div className="upload-overlay-text">Click to upload an image</div>
-          <input ref={fileRef} type="file" accept="image/*" hidden onChange={handleFile} />
+          <div className="upload-overlay-text">
+            Click or drag an image to get started
+          </div>
+          <input ref={fileRef} type="file" accept="image/*" hidden onChange={handleFileInput} />
         </div>
       ) : (
         <div
           className="viewport-canvas"
           style={{ width: "100%", height: "100%", position: "relative" }}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
         >
           <div
             ref={bgRef}
@@ -221,6 +397,7 @@ export function Canvas() {
                 inset: 0,
                 color: scene.ascii.color,
                 opacity: scene.ascii.opacity,
+                mixBlendMode: scene.ascii.blendMode as React.CSSProperties["mixBlendMode"],
                 zIndex: 2,
               }}
             />
@@ -233,7 +410,20 @@ export function Canvas() {
                 ...preStyle,
                 position: "absolute",
                 inset: 0,
-                zIndex: 2,
+                zIndex: 3,
+              }}
+            />
+          )}
+          {showMask && (
+            <canvas
+              ref={maskOverlayRef}
+              style={{
+                position: "absolute",
+                inset: 0,
+                width: "100%",
+                height: "100%",
+                zIndex: 4,
+                pointerEvents: "none",
               }}
             />
           )}
