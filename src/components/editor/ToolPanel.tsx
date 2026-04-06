@@ -2,7 +2,15 @@
 
 import * as Slider from "@radix-ui/react-slider";
 import { useEditorStore } from "@/lib/store";
-import { PaintBrush, MagicWand, Selection, Hand, Eye, EyeSlash } from "@phosphor-icons/react";
+import {
+  PaintBrush,
+  MagicWand,
+  Selection,
+  Hand,
+  Eye,
+  EyeSlash,
+  Eraser,
+} from "@phosphor-icons/react";
 
 export function ToolPanel() {
   const activeTool = useEditorStore((s) => s.activeTool);
@@ -15,13 +23,22 @@ export function ToolPanel() {
   const showAscii = useEditorStore((s) => s.showAscii);
   const showEffects = useEditorStore((s) => s.showEffects);
   const toggleLayer = useEditorStore((s) => s.toggleLayer);
+  const mask = useEditorStore((s) => s.mask);
+  const bumpMaskVersion = useEditorStore((s) => s.bumpMaskVersion);
 
   const tools = [
-    { id: "brush-fg" as const, icon: <PaintBrush size={16} />, title: "Paint foreground" },
-    { id: "brush-bg" as const, icon: <MagicWand size={16} />, title: "Paint background" },
-    { id: "select" as const, icon: <Selection size={16} />, title: "Select" },
-    { id: "pan" as const, icon: <Hand size={16} />, title: "Pan" },
+    { id: "brush-fg" as const, icon: <PaintBrush size={16} />, title: "Foreground brush (B)", shortcut: "B" },
+    { id: "brush-bg" as const, icon: <MagicWand size={16} />, title: "Background brush (N)", shortcut: "N" },
+    { id: "select" as const, icon: <Selection size={16} />, title: "Select (S)", shortcut: "S" },
+    { id: "pan" as const, icon: <Hand size={16} />, title: "Pan (V)", shortcut: "V" },
   ];
+
+  function handleClearMask() {
+    if (mask) {
+      mask.clear(255);
+      bumpMaskVersion();
+    }
+  }
 
   return (
     <div className="panel">
@@ -36,6 +53,7 @@ export function ToolPanel() {
               onClick={() => setActiveTool(t.id)}
             >
               {t.icon}
+              <span className="tool-shortcut">{t.shortcut}</span>
             </button>
           ))}
         </div>
@@ -91,13 +109,18 @@ export function ToolPanel() {
           </Slider.Track>
           <Slider.Thumb className="slider-thumb" />
         </Slider.Root>
+
+        <button className="mask-clear-btn" onClick={handleClearMask}>
+          <Eraser size={12} />
+          <span>Clear mask</span>
+        </button>
       </div>
 
       <div className="panel-section">
         <div className="panel-label">Layers</div>
         {[
           { key: "effects" as const, label: "Effects", active: showEffects },
-          { key: "mask" as const, label: "Mask", active: showMask },
+          { key: "mask" as const, label: "Mask overlay", active: showMask },
           { key: "ascii" as const, label: "ASCII Grid", active: showAscii },
         ].map((layer) => (
           <div
@@ -114,6 +137,18 @@ export function ToolPanel() {
         <div className="layer-item layer-item--active">
           <span>Source Image</span>
           <button className="layer-vis"><Eye size={14} /></button>
+        </div>
+      </div>
+
+      <div className="panel-section panel-section--shortcuts">
+        <div className="panel-label">Shortcuts</div>
+        <div className="shortcut-list">
+          <div className="shortcut-item"><kbd>Space</kbd><span>Play / Pause</span></div>
+          <div className="shortcut-item"><kbd>B</kbd><span>Foreground brush</span></div>
+          <div className="shortcut-item"><kbd>N</kbd><span>Background brush</span></div>
+          <div className="shortcut-item"><kbd>V</kbd><span>Pan tool</span></div>
+          <div className="shortcut-item"><kbd>M</kbd><span>Toggle mask</span></div>
+          <div className="shortcut-item"><kbd>[ ]</kbd><span>Brush size</span></div>
         </div>
       </div>
     </div>
