@@ -3,6 +3,7 @@
 import { create } from "zustand";
 import { type SceneData, type EffectConfig, createDefaultScene } from "@/engine/scene";
 import type { EffectType, MaskRegion } from "@/engine/effects/types";
+import { Mask } from "@/engine/mask";
 
 type Tool = "brush-fg" | "brush-bg" | "pan" | "select";
 
@@ -24,8 +25,13 @@ interface EditorState {
   toggleEffect: (id: string) => void;
   updateEffect: (id: string, updates: Partial<EffectConfig>) => void;
   updateEffectParams: (id: string, params: Record<string, unknown>) => void;
+  reorderEffect: (fromIndex: number, toIndex: number) => void;
 
   // Mask
+  mask: Mask | null;
+  initMask: (width: number, height: number) => void;
+  maskVersion: number;
+  bumpMaskVersion: () => void;
   maskFeather: number;
   setMaskFeather: (feather: number) => void;
   brushSize: number;
@@ -46,6 +52,10 @@ interface EditorState {
   showAscii: boolean;
   showEffects: boolean;
   toggleLayer: (layer: "mask" | "ascii" | "effects") => void;
+
+  // UI
+  expandedEffects: Set<string>;
+  toggleExpandEffect: (id: string) => void;
 }
 
 let effectCounter = 0;
@@ -74,7 +84,12 @@ export const useEditorStore = create<EditorState>((set) => ({
         params: {},
         timeline: { start: 0, end: null, loop: true },
       };
-      return { scene: { ...s.scene, effects: [...s.scene.effects, effect] } };
+      const expanded = new Set(s.expandedEffects);
+      expanded.add(id);
+      return {
+        scene: { ...s.scene, effects: [...s.scene.effects, effect] },
+        expandedEffects: expanded,
+      };
     }),
   removeEffect: (id) =>
     set((s) => ({
@@ -107,7 +122,18 @@ export const useEditorStore = create<EditorState>((set) => ({
         ),
       },
     })),
+  reorderEffect: (fromIndex, toIndex) =>
+    set((s) => {
+      const effects = [...s.scene.effects];
+      const [moved] = effects.splice(fromIndex, 1);
+      effects.splice(toIndex, 0, moved);
+      return { scene: { ...s.scene, effects } };
+    }),
 
+  mask: null,
+  initMask: (width, height) => set({ mask: new Mask(width, height) }),
+  maskVersion: 0,
+  bumpMaskVersion: () => set((s) => ({ maskVersion: s.maskVersion + 1 })),
   maskFeather: 4,
   setMaskFeather: (feather) => set({ maskFeather: feather }),
   brushSize: 24,
@@ -129,5 +155,14 @@ export const useEditorStore = create<EditorState>((set) => ({
       if (layer === "mask") return { showMask: !s.showMask };
       if (layer === "ascii") return { showAscii: !s.showAscii };
       return { showEffects: !s.showEffects };
+    }),
+
+  expandedEffects: new Set<string>(),
+  toggleExpandEffect: (id) =>
+    set((s) => {
+      const expanded = new Set(s.expandedEffects);
+      if (expanded.has(id)) expanded.delete(id);
+      else expanded.add(id);
+      return { expandedEffects: expanded };
     }),
 }));
