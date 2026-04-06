@@ -191,6 +191,28 @@ export function Canvas() {
     ctx.putImageData(imgData, 0, 0);
   }, [showMask, maskVersion, imgSize]);
 
+  // Fast-forward effects from time 0 to targetTime by simulating in steps
+  function simulateToTime(targetTime: number) {
+    const configs = scene.effects;
+    // Re-init all effects from scratch
+    for (let i = 0; i < effectsRef.current.length && i < configs.length; i++) {
+      effectsRef.current[i].instance.init(grid, configs[i].params);
+    }
+    if (asciiTextRef.current) {
+      feedBaseText(effectsRef.current, asciiTextRef.current);
+    }
+
+    // Simulate forward in fixed timesteps
+    const step = 1 / 30; // 30fps simulation
+    const mask = maskGridRef.current;
+    let t = 0;
+    while (t < targetTime) {
+      const dt = Math.min(step, targetTime - t);
+      compositeFrame(effectsRef.current, dt, t, mask, grid);
+      t += dt;
+    }
+  }
+
   // Animation loop
   useEffect(() => {
     if (!playing) {
@@ -198,8 +220,12 @@ export function Canvas() {
       return;
     }
 
-    // Start from current scrubbed time
+    // Simulate effects up to the current scrub position before starting
     const resumeFrom = useEditorStore.getState().currentTime;
+    if (grid.cols > 0 && resumeFrom > 0.1) {
+      simulateToTime(resumeFrom);
+    }
+
     startTimeRef.current = performance.now() - resumeFrom * 1000;
     lastTimeRef.current = resumeFrom;
 
@@ -237,11 +263,16 @@ export function Canvas() {
     };
   }, [playing, grid, scene.playback.duration, scene.playback.loop]);
 
-  // When scrubbing while paused, render a single frame at that time
+  // When scrubbing while paused, simulate up to that time and render
+  const lastScrubRef = useRef(-1);
   useEffect(() => {
     if (playing) return;
     const time = useEditorStore.getState().currentTime;
+    if (time === lastScrubRef.current) return;
+    lastScrubRef.current = time;
+
     if (grid.cols > 0 && sparkleRef.current && effectsRef.current.length > 0) {
+      simulateToTime(time);
       const currentMask = maskGridRef.current;
       const overlay = compositeFrame(effectsRef.current, 0.016, time, currentMask, grid);
       sparkleRef.current.textContent = overlay;
