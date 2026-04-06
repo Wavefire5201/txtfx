@@ -37,6 +37,8 @@ export function Timeline() {
   );
 
   function handleRulerMouseDown(e: React.MouseEvent<HTMLDivElement>) {
+    const wasPlaying = playing;
+    if (wasPlaying) setPlaying(false);
     seekTo(e);
     const handleMove = (ev: MouseEvent) => {
       const ruler = rulerRef.current;
@@ -49,6 +51,7 @@ export function Timeline() {
     const handleUp = () => {
       document.removeEventListener("mousemove", handleMove);
       document.removeEventListener("mouseup", handleUp);
+      if (wasPlaying) setPlaying(true);
     };
     document.addEventListener("mousemove", handleMove);
     document.addEventListener("mouseup", handleUp);

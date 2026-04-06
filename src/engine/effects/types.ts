@@ -16,12 +16,14 @@ export interface EffectCell {
   col: number;
   char: string;
   brightness?: number;
+  color?: string;
+  glowRadius?: number;
 }
 
 export interface ControlDescriptor {
   key: string;
   label: string;
-  type: "slider" | "select" | "toggle" | "text";
+  type: "slider" | "select" | "toggle" | "text" | "color";
   min?: number;
   max?: number;
   step?: number;

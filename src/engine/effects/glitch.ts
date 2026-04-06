@@ -19,12 +19,14 @@ export class GlitchEffect implements AsciiEffect {
   private frequency = 0.5;
   private blockSize = 8;
   private intensity = 0.6;
+  private color = "#ff3366";
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
     this.grid = grid;
     this.frequency = (params.frequency as number) ?? 0.5;
     this.blockSize = (params.blockSize as number) ?? 8;
     this.intensity = (params.intensity as number) ?? 0.6;
+    this.color = (params.color as string) ?? "#ff3366";
     this.blocks = [];
     this.nextSpawn = 0;
   }
@@ -37,8 +39,8 @@ export class GlitchEffect implements AsciiEffect {
       const w = 2 + Math.floor(Math.random() * this.blockSize);
       const h = 1 + Math.floor(Math.random() * Math.max(1, this.blockSize / 3));
       this.blocks.push({
-        col: Math.floor(Math.random() * (cols - w)),
-        row: Math.floor(Math.random() * (rows - h)),
+        col: Math.floor(Math.random() * Math.max(1, cols - w)),
+        row: Math.floor(Math.random() * Math.max(1, rows - h)),
         w,
         h,
         life: 0,
@@ -59,7 +61,7 @@ export class GlitchEffect implements AsciiEffect {
         for (let c = b.col; c < b.col + b.w && c < cols; c++) {
           if (Math.random() > this.intensity) continue;
           const ch = GLITCH_CHARS[Math.floor(Math.random() * GLITCH_CHARS.length)];
-          cells.push({ row: r, col: c, char: ch, brightness: 0.8 + Math.random() * 0.2 });
+          cells.push({ row: r, col: c, char: ch, brightness: 0.8 + Math.random() * 0.2, color: this.color });
         }
       }
     }
@@ -72,6 +74,7 @@ export class GlitchEffect implements AsciiEffect {
       { key: "frequency", label: "Frequency (hz)", type: "slider", min: 0.1, max: 5, step: 0.1, defaultValue: 0.5 },
       { key: "blockSize", label: "Block size", type: "slider", min: 2, max: 20, step: 1, defaultValue: 8 },
       { key: "intensity", label: "Intensity", type: "slider", min: 0.1, max: 1, step: 0.05, defaultValue: 0.6 },
+      { key: "color", label: "Color", type: "color", defaultValue: "#ff3366" },
     ];
   }
 }

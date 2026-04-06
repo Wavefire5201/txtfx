@@ -20,6 +20,7 @@ export class SnowEffect implements AsciiEffect {
   private speedMax = 8;
   private driftAmount = 2;
   private spawnAccum = 0;
+  private color = "#ffffff";
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
     this.grid = grid;
@@ -27,6 +28,7 @@ export class SnowEffect implements AsciiEffect {
     this.speedMin = (params.speedMin as number) ?? 3;
     this.speedMax = (params.speedMax as number) ?? 8;
     this.driftAmount = (params.driftAmount as number) ?? 2;
+    this.color = (params.color as string) ?? "#ffffff";
     this.flakes = [];
     this.spawnAccum = 0;
   }
@@ -62,7 +64,7 @@ export class SnowEffect implements AsciiEffect {
       const r = Math.floor(f.y);
       const c = Math.round(f.col);
       if (r >= 0 && r < rows && c >= 0 && c < cols) {
-        cells.push({ row: r, col: c, char: f.char, brightness: 0.7 });
+        cells.push({ row: r, col: c, char: f.char, brightness: 0.7, color: this.color });
       }
     }
 
@@ -75,6 +77,7 @@ export class SnowEffect implements AsciiEffect {
       { key: "speedMin", label: "Min speed", type: "slider", min: 1, max: 10, step: 0.5, defaultValue: 3 },
       { key: "speedMax", label: "Max speed", type: "slider", min: 3, max: 20, step: 0.5, defaultValue: 8 },
       { key: "driftAmount", label: "Drift", type: "slider", min: 0, max: 5, step: 0.5, defaultValue: 2 },
+      { key: "color", label: "Color", type: "color", defaultValue: "#ffffff" },
     ];
   }
 }

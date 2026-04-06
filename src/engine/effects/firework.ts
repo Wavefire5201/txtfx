@@ -25,6 +25,7 @@ export class FireworkEffect implements AsciiEffect {
   private intervalMax = 5;
   private particleCount = 50;
   private maxRadius = 20;
+  private color = "#ffcc00";
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
     this.grid = grid;
@@ -32,6 +33,7 @@ export class FireworkEffect implements AsciiEffect {
     this.intervalMax = (params.intervalMax as number) ?? 5;
     this.particleCount = (params.particleCount as number) ?? 50;
     this.maxRadius = (params.maxRadius as number) ?? 20;
+    this.color = (params.color as string) ?? "#ffcc00";
     this.bursts = [];
     this.nextSpawn = this.intervalMin + Math.random() * (this.intervalMax - this.intervalMin);
   }
@@ -65,7 +67,7 @@ export class FireworkEffect implements AsciiEffect {
         const c = Math.round(p.c);
         if (r >= 0 && r < rows && c >= 0 && c < cols) {
           const ch = t < 0.3 ? p.char : t < 0.6 ? "+" : ".";
-          cells.push({ row: r, col: c, char: ch, brightness });
+          cells.push({ row: r, col: c, char: ch, brightness, color: this.color });
         }
       }
 
@@ -76,8 +78,8 @@ export class FireworkEffect implements AsciiEffect {
   }
 
   private spawnBurst(cols: number, rows: number): void {
-    const cx = 8 + Math.random() * (cols - 16);
-    const cy = 6 + Math.random() * (rows - 12);
+    const cx = cols > 16 ? 8 + Math.random() * (cols - 16) : cols / 2;
+    const cy = rows > 12 ? 6 + Math.random() * (rows - 12) : rows / 2;
     const particles: Particle[] = [];
 
     // Main radial particles
@@ -136,6 +138,7 @@ export class FireworkEffect implements AsciiEffect {
       { key: "intervalMax", label: "Max interval (s)", type: "slider", min: 2, max: 20, step: 0.5, defaultValue: 5 },
       { key: "particleCount", label: "Particles", type: "slider", min: 20, max: 100, step: 5, defaultValue: 50 },
       { key: "maxRadius", label: "Radius", type: "slider", min: 8, max: 40, step: 2, defaultValue: 20 },
+      { key: "color", label: "Color", type: "color", defaultValue: "#ffcc00" },
     ];
   }
 }

@@ -147,6 +147,23 @@ function EffectControl({
     );
   }
 
+  if (descriptor.type === "color") {
+    const colorVal = typeof current === "string" ? current : String(descriptor.defaultValue);
+    return (
+      <div className="effect-control">
+        <div className="prop-row">
+          <span className="prop-label">{descriptor.label}</span>
+          <input
+            type="color"
+            className="effect-color-input"
+            value={colorVal}
+            onChange={(e) => onChange(descriptor.key, e.target.value)}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return null;
 }
 
@@ -254,6 +271,19 @@ export function PropertiesPanel() {
                         <option value="foreground">Foreground</option>
                         <option value="both">Both</option>
                       </select>
+                    </div>
+
+                    <div className="effect-card-region">
+                      <span className="prop-label">Apply to ASCII</span>
+                      <Switch.Root
+                        className="switch-root"
+                        checked={fx.applyToAscii ?? false}
+                        onCheckedChange={(checked) =>
+                          updateEffect(fx.id, { applyToAscii: checked })
+                        }
+                      >
+                        <Switch.Thumb className="switch-thumb" />
+                      </Switch.Root>
                     </div>
 
                     {controls.map((ctrl) => (

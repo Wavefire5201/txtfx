@@ -18,12 +18,14 @@ export class FireEffect implements AsciiEffect {
   private height = 0.3;
   private spread = 1.5;
   private spawnAccum = 0;
+  private color = "#ff6622";
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
     this.grid = grid;
     this.intensity = (params.intensity as number) ?? 0.5;
     this.height = (params.height as number) ?? 0.3;
     this.spread = (params.spread as number) ?? 1.5;
+    this.color = (params.color as string) ?? "#ff6622";
     this.embers = [];
     this.spawnAccum = 0;
   }
@@ -66,7 +68,7 @@ export class FireEffect implements AsciiEffect {
       const r = Math.round(e.y);
       const c = Math.round(e.col);
       if (r >= 0 && r < rows && c >= 0 && c < cols) {
-        cells.push({ row: r, col: c, char: ch, brightness: 1 - t });
+        cells.push({ row: r, col: c, char: ch, brightness: 1 - t, color: this.color });
       }
     }
 
@@ -78,6 +80,7 @@ export class FireEffect implements AsciiEffect {
       { key: "intensity", label: "Intensity", type: "slider", min: 0.1, max: 1, step: 0.05, defaultValue: 0.5 },
       { key: "height", label: "Height", type: "slider", min: 0.1, max: 1, step: 0.05, defaultValue: 0.3 },
       { key: "spread", label: "Spread", type: "slider", min: 0, max: 5, step: 0.5, defaultValue: 1.5 },
+      { key: "color", label: "Color", type: "color", defaultValue: "#ff6622" },
     ];
   }
 }

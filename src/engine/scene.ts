@@ -45,6 +45,7 @@ export interface EffectConfig {
     end: number | null;
     loop: boolean;
   };
+  applyToAscii: boolean;
 }
 
 export function createDefaultScene(): SceneData {

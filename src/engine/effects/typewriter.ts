@@ -6,11 +6,13 @@ export class TypewriterEffect implements AsciiEffect {
   private baseChars: string[][] = [];
   private speed = 200; // chars per second
   private cursor = "_";
+  private color = "#ffffff";
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
     this.grid = grid;
     this.speed = (params.speed as number) ?? 200;
     this.cursor = (params.cursor as string) ?? "_";
+    this.color = (params.color as string) ?? "#ffffff";
   }
 
   setBaseText(text: string): void {
@@ -32,13 +34,13 @@ export class TypewriterEffect implements AsciiEffect {
         if (count >= revealed) {
           // Cursor position
           if (count === revealed) {
-            cells.push({ row: r, col: c, char: this.cursor, brightness: 1 });
+            cells.push({ row: r, col: c, char: this.cursor, brightness: 1, color: this.color });
           }
           return cells;
         }
         const ch = row[c];
         if (ch !== " ") {
-          cells.push({ row: r, col: c, char: ch, brightness: 0.6 });
+          cells.push({ row: r, col: c, char: ch, brightness: 0.6, color: this.color });
         }
         count++;
       }
@@ -51,6 +53,7 @@ export class TypewriterEffect implements AsciiEffect {
     return [
       { key: "speed", label: "Speed (chars/s)", type: "slider", min: 20, max: 1000, step: 10, defaultValue: 200 },
       { key: "cursor", label: "Cursor char", type: "text", defaultValue: "_" },
+      { key: "color", label: "Color", type: "color", defaultValue: "#ffffff" },
     ];
   }
 }

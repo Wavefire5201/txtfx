@@ -25,6 +25,7 @@ export class CustomEmitterEffect implements AsciiEffect {
   private spawnX = 0.5; // 0-1 normalized
   private spawnY = 1.0;
   private spawnAccum = 0;
+  private color = "#ffffff";
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
     this.grid = grid;
@@ -37,6 +38,7 @@ export class CustomEmitterEffect implements AsciiEffect {
     this.lifetime = (params.lifetime as number) ?? 2;
     this.spawnX = (params.spawnX as number) ?? 0.5;
     this.spawnY = (params.spawnY as number) ?? 1.0;
+    this.color = (params.color as string) ?? "#ffffff";
     this.particles = [];
     this.spawnAccum = 0;
   }
@@ -85,6 +87,7 @@ export class CustomEmitterEffect implements AsciiEffect {
           col: c,
           char: this.chars[charProgress],
           brightness: 1 - t,
+          color: this.color,
         });
       }
     }
@@ -103,6 +106,7 @@ export class CustomEmitterEffect implements AsciiEffect {
       { key: "lifetime", label: "Lifetime (s)", type: "slider", min: 0.2, max: 5, step: 0.1, defaultValue: 2 },
       { key: "spawnX", label: "Spawn X", type: "slider", min: 0, max: 1, step: 0.05, defaultValue: 0.5 },
       { key: "spawnY", label: "Spawn Y", type: "slider", min: 0, max: 1, step: 0.05, defaultValue: 1 },
+      { key: "color", label: "Color", type: "color", defaultValue: "#ffffff" },
     ];
   }
 }

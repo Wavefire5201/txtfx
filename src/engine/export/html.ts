@@ -4,8 +4,20 @@ import type { SceneData } from "../scene";
  * Generates a standalone HTML file that plays the scene.
  * Inlines the scene JSON and a minimal runtime renderer.
  */
+function sanitizeCSS(val: string): string {
+  return val.replace(/[;{}\\<>]/g, '');
+}
+
 export function exportStandaloneHTML(scene: SceneData): string {
-  const sceneJSON = JSON.stringify(scene);
+  const safeJSON = JSON.stringify(scene)
+    .replace(/<\//g, '<\\/')
+    .replace(/<!--/g, '<\\!--');
+
+  // Sanitize CSS values that will be used in inline styles
+  const safeFontSize = scene.ascii.fontSize.replace(/[;{}\\<>]/g, '');
+  const safeFontFamily = scene.ascii.fontFamily.replace(/[;{}\\<>]/g, '');
+  const safeLetterSpacing = scene.ascii.letterSpacing.replace(/[;{}\\<>]/g, '');
+  const safeColor = scene.ascii.color.replace(/[;{}\\<>]/g, '');
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -34,7 +46,7 @@ pre{position:absolute;inset:0;margin:0;padding:10px 8px 8px;overflow:hidden;whit
   <div class="info">Made with txtfx</div>
 </div>
 <script>
-var SCENE=${sceneJSON};
+var SCENE=${safeJSON};
 // Minimal playback runtime - effects rendered server-side as baked frames
 // For a full runtime, the effect engine would need to be bundled here.
 // This version shows the ASCII overlay with a "shimmer" animation.
@@ -42,9 +54,8 @@ var SCENE=${sceneJSON};
   var bg=document.getElementById("bg");
   var ascii=document.getElementById("ascii");
   var fx=document.getElementById("fx");
-  var style=SCENE.ascii;
-  var preStyle="font-size:"+style.fontSize+";font-family:"+style.fontFamily+";line-height:"+style.lineHeight+";letter-spacing:"+style.letterSpacing;
-  ascii.setAttribute("style",ascii.getAttribute("style")+";"+preStyle+";color:"+style.color+";opacity:"+style.opacity);
+  var preStyle="font-size:${safeFontSize};font-family:${safeFontFamily};line-height:${scene.ascii.lineHeight};letter-spacing:${safeLetterSpacing}";
+  ascii.setAttribute("style",ascii.getAttribute("style")+";"+preStyle+";color:${safeColor};opacity:${scene.ascii.opacity}");
   fx.setAttribute("style",fx.getAttribute("style")+";"+preStyle);
 
   if(SCENE.image.data){

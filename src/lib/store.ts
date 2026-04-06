@@ -51,7 +51,8 @@ interface EditorState {
   showMask: boolean;
   showAscii: boolean;
   showEffects: boolean;
-  toggleLayer: (layer: "mask" | "ascii" | "effects") => void;
+  showImage: boolean;
+  toggleLayer: (layer: "mask" | "ascii" | "effects" | "image") => void;
 
   // UI
   expandedEffects: Set<string>;
@@ -83,6 +84,7 @@ export const useEditorStore = create<EditorState>((set) => ({
         maskRegion: "background" as MaskRegion,
         params: {},
         timeline: { start: 0, end: null, loop: true },
+        applyToAscii: false,
       };
       const expanded = new Set(s.expandedEffects);
       expanded.add(id);
@@ -150,11 +152,13 @@ export const useEditorStore = create<EditorState>((set) => ({
   showMask: false,
   showAscii: true,
   showEffects: true,
+  showImage: true,
   toggleLayer: (layer) =>
     set((s) => {
       if (layer === "mask") return { showMask: !s.showMask };
       if (layer === "ascii") return { showAscii: !s.showAscii };
-      return { showEffects: !s.showEffects };
+      if (layer === "effects") return { showEffects: !s.showEffects };
+      return { showImage: !s.showImage };
     }),
 
   expandedEffects: new Set<string>(),

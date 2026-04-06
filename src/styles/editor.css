@@ -619,6 +619,25 @@ body {
   border-color: var(--accent);
 }
 
+.effect-color-input {
+  width: 28px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+}
+.effect-color-input::-webkit-color-swatch-wrapper {
+  padding: 2px;
+}
+.effect-color-input::-webkit-color-swatch {
+  border: none;
+  border-radius: 2px;
+}
+
 .effect-remove-btn {
   display: flex;
   align-items: center;

@@ -12,7 +12,7 @@ export function exportEmbedSnippet(scene: SceneData): string {
   return `<!-- txtfx embed -->
 <div style="position:relative;width:100%;max-width:800px;aspect-ratio:16/9;background:#0a0a0e;border-radius:8px;overflow:hidden">
   <iframe
-    srcdoc='${createMinimalPlayer(scene)}'
+    srcdoc='${createMinimalPlayer(scene).replace(/'/g, "&#39;")}'
     style="width:100%;height:100%;border:none"
     sandbox="allow-scripts"
     loading="lazy"
@@ -23,7 +23,9 @@ export function exportEmbedSnippet(scene: SceneData): string {
 }
 
 function createMinimalPlayer(scene: SceneData): string {
-  const escaped = JSON.stringify(scene).replace(/'/g, "\\'").replace(/"/g, "&quot;");
+  const b64 = typeof btoa === "function"
+    ? btoa(unescape(encodeURIComponent(JSON.stringify(scene))))
+    : Buffer.from(JSON.stringify(scene)).toString("base64");
 
   return `<!DOCTYPE html>
 <html><head><style>
@@ -35,11 +37,11 @@ pre{position:absolute;inset:0;margin:0;padding:10px 8px;overflow:hidden;white-sp
 .a{color:rgba(220,230,255,.38)}
 .f{color:rgba(255,250,240,.95);text-shadow:0 0 6px rgba(200,220,255,.8)}
 </style></head><body>
-<div class=&quot;w&quot;><div class=&quot;bg&quot; id=&quot;b&quot;></div>
-<pre class=&quot;a&quot; id=&quot;a&quot;></pre><pre class=&quot;f&quot; id=&quot;f&quot;></pre></div>
-<script>var S=JSON.parse(&quot;${escaped}&quot;);
-var b=document.getElementById(&quot;b&quot;);
-if(S.image.data)b.style.backgroundImage=&quot;url(&quot;+S.image.data+&quot;)&quot;;
+<div class="w"><div class="bg" id="b"></div>
+<pre class="a" id="a"></pre><pre class="f" id="f"></pre></div>
+<script>var S=JSON.parse(decodeURIComponent(escape(atob("${b64}"))));
+var b=document.getElementById("b");
+if(S.image.data)b.style.backgroundImage="url("+S.image.data+")";
 </script></body></html>`;
 }
 

@@ -14,12 +14,14 @@ export class DecodeEffect implements AsciiEffect {
   private duration = 2.4;
   private settleTime = 0.4;
   private diagonalBias = 0.7;
+  private color = "#00ff41";
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
     this.grid = grid;
     this.duration = (params.duration as number) ?? 2.4;
     this.settleTime = (params.settleTime as number) ?? 0.4;
     this.diagonalBias = (params.diagonalBias as number) ?? 0.7;
+    this.color = (params.color as string) ?? "#00ff41";
     this.buildDelays();
   }
 
@@ -59,14 +61,14 @@ export class DecodeEffect implements AsciiEffect {
         if (elapsed < 0) {
           // Not yet revealed — occasional random char
           if (Math.random() < 0.15) {
-            cells.push({ row: r, col: c, char: randomDecodeChar(), brightness: 0.3 });
+            cells.push({ row: r, col: c, char: randomDecodeChar(), brightness: 0.3, color: this.color });
           }
         } else if (elapsed < this.settleTime) {
           // Flickering between random and correct
           const progress = elapsed / this.settleTime;
           const correct = Math.random() < progress * 0.8;
           const ch = correct ? row[c] : randomDecodeChar();
-          cells.push({ row: r, col: c, char: ch, brightness: 0.5 + progress * 0.5 });
+          cells.push({ row: r, col: c, char: ch, brightness: 0.5 + progress * 0.5, color: this.color });
         }
         // After settleTime: correct char locked in (handled by base ASCII layer)
       }
@@ -80,6 +82,7 @@ export class DecodeEffect implements AsciiEffect {
       { key: "duration", label: "Duration (s)", type: "slider", min: 0.5, max: 5, step: 0.1, defaultValue: 2.4 },
       { key: "settleTime", label: "Settle time (s)", type: "slider", min: 0.1, max: 1, step: 0.05, defaultValue: 0.4 },
       { key: "diagonalBias", label: "Diagonal bias", type: "slider", min: 0, max: 1, step: 0.05, defaultValue: 0.7 },
+      { key: "color", label: "Color", type: "color", defaultValue: "#00ff41" },
     ];
   }
 }

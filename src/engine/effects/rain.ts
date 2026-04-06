@@ -16,6 +16,7 @@ export class RainEffect implements AsciiEffect {
   private speedMax = 35;
   private wind = 0;
   private spawnAccum = 0;
+  private color = "#88bbee";
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
     this.grid = grid;
@@ -23,6 +24,7 @@ export class RainEffect implements AsciiEffect {
     this.speedMin = (params.speedMin as number) ?? 15;
     this.speedMax = (params.speedMax as number) ?? 35;
     this.wind = (params.wind as number) ?? 0;
+    this.color = (params.color as string) ?? "#88bbee";
     this.drops = [];
     this.spawnAccum = 0;
   }
@@ -61,7 +63,7 @@ export class RainEffect implements AsciiEffect {
         const r = headRow - j;
         if (r < 0 || r >= rows || col < 0 || col >= cols) continue;
         const ch = j === 0 ? "|" : j === 1 ? ":" : ".";
-        cells.push({ row: r, col, char: ch, brightness: 1 - j / d.length });
+        cells.push({ row: r, col, char: ch, brightness: 1 - j / d.length, color: this.color });
       }
     }
 
@@ -74,6 +76,7 @@ export class RainEffect implements AsciiEffect {
       { key: "speedMin", label: "Min speed", type: "slider", min: 5, max: 30, step: 1, defaultValue: 15 },
       { key: "speedMax", label: "Max speed", type: "slider", min: 10, max: 60, step: 1, defaultValue: 35 },
       { key: "wind", label: "Wind", type: "slider", min: -10, max: 10, step: 0.5, defaultValue: 0 },
+      { key: "color", label: "Color", type: "color", defaultValue: "#88bbee" },
     ];
   }
 }

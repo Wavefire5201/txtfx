@@ -29,6 +29,7 @@ export class MeteorEffect implements AsciiEffect {
   private speedMin = 22;
   private speedMax = 36;
   private trailLength = 25;
+  private color = "#ffaa33";
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
     this.grid = grid;
@@ -38,6 +39,7 @@ export class MeteorEffect implements AsciiEffect {
     this.speedMin = (params.speedMin as number) ?? 22;
     this.speedMax = (params.speedMax as number) ?? 36;
     this.trailLength = (params.trailLength as number) ?? 25;
+    this.color = (params.color as string) ?? "#ffaa33";
 
     this.dc = Math.cos((this.angle * Math.PI) / 180);
     this.dr = Math.sin((-this.angle * Math.PI) / 180);
@@ -81,10 +83,10 @@ export class MeteorEffect implements AsciiEffect {
         if (p.age > 0.7) continue;
         const ch = p.age < 0.12 ? "*" : p.age < 0.35 ? "+" : ".";
         const brightness = 1 - p.age / 0.7;
-        cells.push({ row: p.r, col: p.c, char: ch, brightness });
+        cells.push({ row: p.r, col: p.c, char: ch, brightness, color: this.color });
       }
       if (m.age < m.maxAge && !offscreen) {
-        cells.push({ row: Math.round(m.r), col: Math.round(m.c), char: "@", brightness: 1 });
+        cells.push({ row: Math.round(m.r), col: Math.round(m.c), char: "@", brightness: 1, color: this.color });
       }
     }
 
@@ -97,6 +99,7 @@ export class MeteorEffect implements AsciiEffect {
       { key: "intervalMin", label: "Min interval (s)", type: "slider", min: 0.5, max: 10, step: 0.5, defaultValue: 3 },
       { key: "intervalMax", label: "Max interval (s)", type: "slider", min: 1, max: 20, step: 0.5, defaultValue: 7 },
       { key: "trailLength", label: "Trail length", type: "slider", min: 5, max: 50, step: 1, defaultValue: 25 },
+      { key: "color", label: "Color", type: "color", defaultValue: "#ffaa33" },
     ];
   }
 }

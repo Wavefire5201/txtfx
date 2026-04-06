@@ -22,6 +22,7 @@ export function ToolPanel() {
   const showMask = useEditorStore((s) => s.showMask);
   const showAscii = useEditorStore((s) => s.showAscii);
   const showEffects = useEditorStore((s) => s.showEffects);
+  const showImage = useEditorStore((s) => s.showImage);
   const toggleLayer = useEditorStore((s) => s.toggleLayer);
   const mask = useEditorStore((s) => s.mask);
   const bumpMaskVersion = useEditorStore((s) => s.bumpMaskVersion);
@@ -134,9 +135,15 @@ export function ToolPanel() {
             </button>
           </div>
         ))}
-        <div className="layer-item layer-item--active">
+        <div
+          key="image"
+          className={`layer-item ${showImage ? "layer-item--active" : ""}`}
+          onClick={() => toggleLayer("image")}
+        >
           <span>Source Image</span>
-          <button className="layer-vis"><Eye size={14} /></button>
+          <button className="layer-vis">
+            {showImage ? <Eye size={14} /> : <EyeSlash size={14} />}
+          </button>
         </div>
       </div>
 

@@ -7,12 +7,14 @@ export class WavesEffect implements AsciiEffect {
   private frequency = 0.3;
   private speed = 2;
   private baseChars: string[][] = [];
+  private color = "#4488ff";
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
     this.grid = grid;
     this.amplitude = (params.amplitude as number) ?? 2;
     this.frequency = (params.frequency as number) ?? 0.3;
     this.speed = (params.speed as number) ?? 2;
+    this.color = (params.color as string) ?? "#4488ff";
   }
 
   /** Must be called after ASCII text is generated, to capture the base grid. */
@@ -37,7 +39,7 @@ export class WavesEffect implements AsciiEffect {
         const ch = row[srcCol];
         if (ch === " ") continue;
         if (offset !== 0) {
-          cells.push({ row: r, col: c, char: ch, brightness: 0.5 });
+          cells.push({ row: r, col: c, char: ch, brightness: 0.5, color: this.color });
         }
       }
     }
@@ -50,6 +52,7 @@ export class WavesEffect implements AsciiEffect {
       { key: "amplitude", label: "Amplitude", type: "slider", min: 0.5, max: 8, step: 0.5, defaultValue: 2 },
       { key: "frequency", label: "Frequency", type: "slider", min: 0.05, max: 1, step: 0.05, defaultValue: 0.3 },
       { key: "speed", label: "Speed", type: "slider", min: 0.5, max: 5, step: 0.5, defaultValue: 2 },
+      { key: "color", label: "Color", type: "color", defaultValue: "#4488ff" },
     ];
   }
 }

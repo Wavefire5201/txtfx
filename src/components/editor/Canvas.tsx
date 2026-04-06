@@ -4,7 +4,7 @@ import { useRef, useEffect, useCallback, useState } from "react";
 import { useEditorStore } from "@/lib/store";
 import { measureGrid, imageToAscii, sampleMeanColor } from "@/engine/ascii";
 import { createEffect } from "@/engine/effects";
-import { compositeFrame, type ActiveEffect } from "@/engine/renderer";
+import { compositeFrame, type ActiveEffect, type GlowCell } from "@/engine/renderer";
 import type { GridInfo, MaskGrid } from "@/engine/effects/types";
 import { ImageSquare, UploadSimple } from "@phosphor-icons/react";
 import type { WavesEffect } from "@/engine/effects/waves";
@@ -17,6 +17,7 @@ export function Canvas() {
   const containerRef = useRef<HTMLDivElement>(null);
   const asciiRef = useRef<HTMLPreElement>(null);
   const sparkleRef = useRef<HTMLPreElement>(null);
+  const glowCanvasRef = useRef<HTMLCanvasElement>(null);
   const maskOverlayRef = useRef<HTMLCanvasElement>(null);
   const bgRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -27,8 +28,10 @@ export function Canvas() {
   const showAscii = useEditorStore((s) => s.showAscii);
   const showEffects = useEditorStore((s) => s.showEffects);
   const showMask = useEditorStore((s) => s.showMask);
+  const showImage = useEditorStore((s) => s.showImage);
   const playing = useEditorStore((s) => s.playing);
   const setPlaying = useEditorStore((s) => s.setPlaying);
+  const currentTime = useEditorStore((s) => s.currentTime);
   const setCurrentTime = useEditorStore((s) => s.setCurrentTime);
   const activeTool = useEditorStore((s) => s.activeTool);
   const brushSize = useEditorStore((s) => s.brushSize);
@@ -47,6 +50,8 @@ export function Canvas() {
   const animRef = useRef<number>(0);
   const startTimeRef = useRef(0);
   const lastTimeRef = useRef(0);
+  const lastRenderedTimeRef = useRef(0);
+  const lastStoreUpdateRef = useRef(0);
   const isPaintingRef = useRef(false);
   const lastPaintRef = useRef<{ x: number; y: number } | null>(null);
   const maskGridRef = useRef<MaskGrid>(EMPTY_MASK);
@@ -100,6 +105,7 @@ export function Canvas() {
         timelineStart: cfg.timeline.start,
         timelineEnd: cfg.timeline.end,
         loop: cfg.timeline.loop,
+        applyToAscii: cfg.applyToAscii ?? false,
       };
     });
     if (asciiTextRef.current) {
@@ -203,13 +209,75 @@ export function Canvas() {
     }
 
     // Simulate forward in fixed timesteps
-    const step = 1 / 30; // 30fps simulation
+    const step = Math.max(1 / 30, targetTime / 60); // At most 60 steps
     const mask = maskGridRef.current;
     let t = 0;
     while (t < targetTime) {
       const dt = Math.min(step, targetTime - t);
-      compositeFrame(effectsRef.current, dt, t, mask, grid);
+      compositeFrame(effectsRef.current, dt, t, mask, grid, asciiTextRef.current);
       t += dt;
+    }
+  }
+
+  function renderGlow(glowCells: GlowCell[]) {
+    const canvas = glowCanvasRef.current;
+    const container = containerRef.current;
+    if (!canvas || !container) return;
+
+    const rect = container.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    const w = rect.width;
+    const h = rect.height;
+
+    // Resize canvas (also clears it)
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+
+    if (glowCells.length === 0) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    ctx.scale(dpr, dpr);
+
+    // Match the ASCII pre font
+    ctx.font = `${grid.fontSize}px ${scene.ascii.fontFamily}`;
+    ctx.textBaseline = "top";
+
+    // Match the pre element's padding: 10px 8px 8px (top right bottom left → top=10, left=8)
+    const padLeft = 8;
+    const padTop = 10;
+
+    for (const cell of glowCells) {
+      const x = padLeft + cell.col * grid.charW;
+      const y = padTop + cell.row * grid.charH;
+      const cx = x + grid.charW * 0.5;
+      const cy = y + grid.charH * 0.5;
+
+      // Parse hex color to RGB
+      const hex = cell.color;
+      const r = parseInt(hex.slice(1, 3), 16) || 0;
+      const g = parseInt(hex.slice(3, 5), 16) || 0;
+      const b = parseInt(hex.slice(5, 7), 16) || 0;
+
+      const a = cell.brightness;
+
+      // 1. Radial gradient glow
+      const glowRadius = cell.glowRadius ?? (4 + 14 * a);
+      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, glowRadius);
+      grad.addColorStop(0, `rgba(${r},${g},${b},${a * 0.7})`);
+      grad.addColorStop(0.4, `rgba(${r},${g},${b},${a * 0.28})`);
+      grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
+      ctx.fillStyle = grad;
+      ctx.fillRect(cx - glowRadius, cy - glowRadius, glowRadius * 2, glowRadius * 2);
+
+      // 2. Colored text with shadow (double-painted for brightness)
+      ctx.save();
+      ctx.shadowColor = `rgba(${r},${g},${b},${Math.min(1, a)})`;
+      ctx.shadowBlur = 12;
+      ctx.fillStyle = `rgba(${r},${g},${b},${Math.min(1, a * 0.95)})`;
+      ctx.fillText(cell.char, x, y);
+      ctx.fillText(cell.char, x, y);
+      ctx.restore();
     }
   }
 
@@ -220,12 +288,8 @@ export function Canvas() {
       return;
     }
 
-    // Simulate effects up to the current scrub position before starting
+    // Resume from current position without re-simulating (effects already have correct state)
     const resumeFrom = useEditorStore.getState().currentTime;
-    if (grid.cols > 0 && resumeFrom > 0.1) {
-      simulateToTime(resumeFrom);
-    }
-
     startTimeRef.current = performance.now() - resumeFrom * 1000;
     lastTimeRef.current = resumeFrom;
 
@@ -237,7 +301,14 @@ export function Canvas() {
       let now = elapsed;
       if (loop && duration > 0) {
         now = elapsed % duration;
-      } else if (now > duration) {
+      }
+
+      // Detect loop wrap and re-initialize effects
+      if (now < lastTimeRef.current) {
+        simulateToTime(now);
+      }
+
+      if (!loop && now > duration) {
         useEditorStore.getState().setPlaying(false);
         useEditorStore.getState().setCurrentTime(duration);
         return;
@@ -245,13 +316,18 @@ export function Canvas() {
 
       const dt = Math.min(0.05, Math.abs(now - lastTimeRef.current));
       lastTimeRef.current = now;
+      lastRenderedTimeRef.current = now;
 
-      setCurrentTime(now);
+      if (now - lastStoreUpdateRef.current > 0.1) {
+        setCurrentTime(now);
+        lastStoreUpdateRef.current = now;
+      }
 
       if (grid.cols > 0 && sparkleRef.current) {
         const currentMask = maskGridRef.current;
-        const overlay = compositeFrame(effectsRef.current, dt, now, currentMask, grid);
-        sparkleRef.current.textContent = overlay;
+        const result = compositeFrame(effectsRef.current, dt, now, currentMask, grid, asciiTextRef.current);
+        sparkleRef.current.textContent = result.text;
+        renderGlow(result.glowCells);
       }
 
       animRef.current = requestAnimationFrame(tick);
@@ -264,20 +340,21 @@ export function Canvas() {
   }, [playing, grid, scene.playback.duration, scene.playback.loop]);
 
   // When scrubbing while paused, simulate up to that time and render
-  const lastScrubRef = useRef(-1);
   useEffect(() => {
     if (playing) return;
-    const time = useEditorStore.getState().currentTime;
-    if (time === lastScrubRef.current) return;
-    lastScrubRef.current = time;
+
+    // Skip if time hasn't changed from what was last rendered (e.g., just paused)
+    if (Math.abs(currentTime - lastRenderedTimeRef.current) < 0.001) return;
+    lastRenderedTimeRef.current = currentTime;
 
     if (grid.cols > 0 && sparkleRef.current && effectsRef.current.length > 0) {
-      simulateToTime(time);
+      simulateToTime(currentTime);
       const currentMask = maskGridRef.current;
-      const overlay = compositeFrame(effectsRef.current, 0.016, time, currentMask, grid);
-      sparkleRef.current.textContent = overlay;
+      const result = compositeFrame(effectsRef.current, 0.016, currentTime, currentMask, grid, asciiTextRef.current);
+      sparkleRef.current.textContent = result.text;
+      renderGlow(result.glowCells);
     }
-  });
+  }, [playing, currentTime, grid]);
 
   // Auto-play when effects are added
   useEffect(() => {
@@ -377,6 +454,7 @@ export function Canvas() {
 
     const file = e.dataTransfer.files?.[0];
     if (!file || !file.type.startsWith("image/")) return;
+    if (file.size > 20 * 1024 * 1024) return; // 20MB limit
     const reader = new FileReader();
     reader.onload = () => setImageUrl(reader.result as string);
     reader.readAsDataURL(file);
@@ -388,6 +466,7 @@ export function Canvas() {
   function handleFileInput(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    if (file.size > 20 * 1024 * 1024) return; // 20MB limit
     const reader = new FileReader();
     reader.onload = () => setImageUrl(reader.result as string);
     reader.readAsDataURL(file);
@@ -445,6 +524,7 @@ export function Canvas() {
               backgroundPosition: "center",
               transform: "scale(1.03)",
               opacity: 0.86,
+              visibility: showImage ? "visible" : "hidden",
             }}
           />
           <div
@@ -485,13 +565,26 @@ export function Canvas() {
             }}
           />
           <canvas
-            ref={maskOverlayRef}
+            ref={glowCanvasRef}
+            className="ascii-glow"
             style={{
               position: "absolute",
               inset: 0,
               width: "100%",
               height: "100%",
               zIndex: 4,
+              pointerEvents: "none",
+              visibility: showEffects ? "visible" : "hidden",
+            }}
+          />
+          <canvas
+            ref={maskOverlayRef}
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              zIndex: 5,
               pointerEvents: "none",
               visibility: showMask ? "visible" : "hidden",
             }}
