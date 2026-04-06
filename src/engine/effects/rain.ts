@@ -15,6 +15,7 @@ export class RainEffect implements AsciiEffect {
   private speedMin = 15;
   private speedMax = 35;
   private wind = 0;
+  private spawnAccum = 0;
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
     this.grid = grid;
@@ -23,14 +24,17 @@ export class RainEffect implements AsciiEffect {
     this.speedMax = (params.speedMax as number) ?? 35;
     this.wind = (params.wind as number) ?? 0;
     this.drops = [];
+    this.spawnAccum = 0;
   }
 
   update(dt: number, _time: number, _mask: MaskGrid): EffectCell[] {
     const { cols, rows } = this.grid;
     const cells: EffectCell[] = [];
 
-    // Spawn new drops
-    const spawnCount = Math.floor(cols * this.density * dt);
+    // Spawn new drops with fractional accumulation
+    this.spawnAccum += cols * this.density * dt;
+    const spawnCount = Math.floor(this.spawnAccum);
+    this.spawnAccum -= spawnCount;
     for (let i = 0; i < spawnCount; i++) {
       this.drops.push({
         col: Math.floor(Math.random() * cols),

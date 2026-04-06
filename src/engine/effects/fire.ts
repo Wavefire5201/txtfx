@@ -17,6 +17,7 @@ export class FireEffect implements AsciiEffect {
   private intensity = 0.5;
   private height = 0.3;
   private spread = 1.5;
+  private spawnAccum = 0;
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
     this.grid = grid;
@@ -24,6 +25,7 @@ export class FireEffect implements AsciiEffect {
     this.height = (params.height as number) ?? 0.3;
     this.spread = (params.spread as number) ?? 1.5;
     this.embers = [];
+    this.spawnAccum = 0;
   }
 
   update(dt: number, _time: number, _mask: MaskGrid): EffectCell[] {
@@ -31,8 +33,10 @@ export class FireEffect implements AsciiEffect {
     const cells: EffectCell[] = [];
     const baseRow = rows - 1;
 
-    // Spawn embers along the bottom
-    const spawnCount = Math.floor(cols * this.intensity * dt * 3);
+    // Spawn embers with fractional accumulation
+    this.spawnAccum += cols * this.intensity * dt * 3;
+    const spawnCount = Math.floor(this.spawnAccum);
+    this.spawnAccum -= spawnCount;
     for (let i = 0; i < spawnCount; i++) {
       this.embers.push({
         col: Math.random() * cols,

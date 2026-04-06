@@ -19,6 +19,7 @@ export class SnowEffect implements AsciiEffect {
   private speedMin = 3;
   private speedMax = 8;
   private driftAmount = 2;
+  private spawnAccum = 0;
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
     this.grid = grid;
@@ -27,13 +28,16 @@ export class SnowEffect implements AsciiEffect {
     this.speedMax = (params.speedMax as number) ?? 8;
     this.driftAmount = (params.driftAmount as number) ?? 2;
     this.flakes = [];
+    this.spawnAccum = 0;
   }
 
   update(dt: number, time: number, _mask: MaskGrid): EffectCell[] {
     const { cols, rows } = this.grid;
     const cells: EffectCell[] = [];
 
-    const spawnCount = Math.floor(cols * this.density * dt);
+    this.spawnAccum += cols * this.density * dt;
+    const spawnCount = Math.floor(this.spawnAccum);
+    this.spawnAccum -= spawnCount;
     for (let i = 0; i < spawnCount; i++) {
       this.flakes.push({
         col: Math.random() * cols,

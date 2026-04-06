@@ -24,6 +24,7 @@ export class CustomEmitterEffect implements AsciiEffect {
   private lifetime = 2;
   private spawnX = 0.5; // 0-1 normalized
   private spawnY = 1.0;
+  private spawnAccum = 0;
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
     this.grid = grid;
@@ -37,14 +38,17 @@ export class CustomEmitterEffect implements AsciiEffect {
     this.spawnX = (params.spawnX as number) ?? 0.5;
     this.spawnY = (params.spawnY as number) ?? 1.0;
     this.particles = [];
+    this.spawnAccum = 0;
   }
 
   update(dt: number, _time: number, _mask: MaskGrid): EffectCell[] {
     const { cols, rows } = this.grid;
     const cells: EffectCell[] = [];
 
-    // Spawn
-    const count = Math.floor(this.spawnRate * dt);
+    // Spawn with fractional accumulation
+    this.spawnAccum += this.spawnRate * dt;
+    const count = Math.floor(this.spawnAccum);
+    this.spawnAccum -= count;
     for (let i = 0; i < count; i++) {
       const angle = ((this.direction + (Math.random() - 0.5) * this.spread) * Math.PI) / 180;
       const spd = this.speed * (0.7 + Math.random() * 0.6);

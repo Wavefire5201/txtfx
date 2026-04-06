@@ -7,6 +7,9 @@ import { createEffect } from "@/engine/effects";
 import { compositeFrame, type ActiveEffect } from "@/engine/renderer";
 import type { GridInfo, MaskGrid } from "@/engine/effects/types";
 import { ImageSquare } from "@phosphor-icons/react";
+import type { WavesEffect } from "@/engine/effects/waves";
+import type { TypewriterEffect } from "@/engine/effects/typewriter";
+import type { DecodeEffect } from "@/engine/effects/decode";
 
 const EMPTY_MASK: MaskGrid = { get: () => 1 };
 
@@ -30,6 +33,7 @@ export function Canvas() {
 
   const imgRef = useRef<HTMLImageElement | null>(null);
   const effectsRef = useRef<ActiveEffect[]>([]);
+  const asciiTextRef = useRef<string>("");
   const animRef = useRef<number>(0);
   const startTimeRef = useRef(0);
   const lastTimeRef = useRef(0);
@@ -54,9 +58,20 @@ export function Canvas() {
     img.src = imageUrl;
   }, [imageUrl]);
 
+  // Feed base text to text-dependent effects
+  function feedBaseText(effects: ActiveEffect[], text: string) {
+    for (const fx of effects) {
+      const inst = fx.instance;
+      if ("setBaseText" in inst && typeof (inst as WavesEffect | TypewriterEffect | DecodeEffect).setBaseText === "function") {
+        (inst as WavesEffect | TypewriterEffect | DecodeEffect).setBaseText(text);
+      }
+    }
+  }
+
   // Rebuild effects when scene effects change
   useEffect(() => {
-    effectsRef.current = scene.effects.map((cfg) => {
+    const configs = scene.effects;
+    effectsRef.current = configs.map((cfg) => {
       const instance = createEffect(cfg.type);
       if (grid.cols > 0) instance.init(grid, cfg.params);
       return {
@@ -68,6 +83,10 @@ export function Canvas() {
         loop: cfg.timeline.loop,
       };
     });
+    // Feed base text to newly created effects
+    if (asciiTextRef.current) {
+      feedBaseText(effectsRef.current, asciiTextRef.current);
+    }
   }, [scene.effects, grid]);
 
   const regenerate = useCallback(() => {
@@ -80,12 +99,16 @@ export function Canvas() {
 
     const text = imageToAscii(img, g, { ramp: scene.ascii.ramp });
     pre.textContent = text;
+    asciiTextRef.current = text;
 
-    // Re-init all effects with new grid
-    for (const fx of effectsRef.current) {
-      fx.instance.init(g, {});
+    // Re-init effects with new grid, preserving their params from scene config
+    const configs = scene.effects;
+    for (let i = 0; i < effectsRef.current.length && i < configs.length; i++) {
+      effectsRef.current[i].instance.init(g, configs[i].params);
     }
-  }, [scene.ascii.ramp]);
+
+    feedBaseText(effectsRef.current, text);
+  }, [scene.ascii.ramp, scene.effects]);
 
   // Resize observer
   useEffect(() => {
