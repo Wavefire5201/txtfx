@@ -33,7 +33,6 @@ export function Canvas() {
   const activeTool = useEditorStore((s) => s.activeTool);
   const brushSize = useEditorStore((s) => s.brushSize);
   const maskFeather = useEditorStore((s) => s.maskFeather);
-  const mask = useEditorStore((s) => s.mask);
   const initMask = useEditorStore((s) => s.initMask);
   const maskVersion = useEditorStore((s) => s.maskVersion);
   const bumpMaskVersion = useEditorStore((s) => s.bumpMaskVersion);
@@ -49,6 +48,7 @@ export function Canvas() {
   const startTimeRef = useRef(0);
   const lastTimeRef = useRef(0);
   const isPaintingRef = useRef(false);
+  const lastPaintRef = useRef<{ x: number; y: number } | null>(null);
   const maskGridRef = useRef<MaskGrid>(EMPTY_MASK);
 
   // Load image
@@ -144,9 +144,9 @@ export function Canvas() {
     }
   }, [maskVersion, grid, imgSize]);
 
-  // Draw mask overlay
+  // Draw mask overlay (always update so toggling visibility is instant)
   useEffect(() => {
-    if (!showMask || !maskOverlayRef.current) return;
+    if (!maskOverlayRef.current) return;
     const canvas = maskOverlayRef.current;
     const container = containerRef.current;
     if (!container) return;
@@ -193,13 +193,15 @@ export function Canvas() {
 
   // Animation loop
   useEffect(() => {
-    if (!playing || !showEffects) {
+    if (!playing) {
       if (animRef.current) cancelAnimationFrame(animRef.current);
       return;
     }
 
-    startTimeRef.current = performance.now();
-    lastTimeRef.current = 0;
+    // Start from current scrubbed time
+    const resumeFrom = useEditorStore.getState().currentTime;
+    startTimeRef.current = performance.now() - resumeFrom * 1000;
+    lastTimeRef.current = resumeFrom;
 
     const duration = scene.playback.duration;
     const loop = scene.playback.loop;
@@ -211,21 +213,18 @@ export function Canvas() {
         now = elapsed % duration;
       } else if (now > duration) {
         useEditorStore.getState().setPlaying(false);
+        useEditorStore.getState().setCurrentTime(duration);
         return;
       }
-      const dt = Math.min(0.05, now - lastTimeRef.current);
-      if (dt < 0) {
-        // Wrapped around in loop
-        lastTimeRef.current = 0;
-      } else {
-        lastTimeRef.current = now;
-      }
+
+      const dt = Math.min(0.05, Math.abs(now - lastTimeRef.current));
+      lastTimeRef.current = now;
 
       setCurrentTime(now);
 
       if (grid.cols > 0 && sparkleRef.current) {
         const currentMask = maskGridRef.current;
-        const overlay = compositeFrame(effectsRef.current, Math.abs(dt), now, currentMask, grid);
+        const overlay = compositeFrame(effectsRef.current, dt, now, currentMask, grid);
         sparkleRef.current.textContent = overlay;
       }
 
@@ -236,7 +235,18 @@ export function Canvas() {
     return () => {
       if (animRef.current) cancelAnimationFrame(animRef.current);
     };
-  }, [playing, showEffects, grid, scene.playback.duration, scene.playback.loop]);
+  }, [playing, grid, scene.playback.duration, scene.playback.loop]);
+
+  // When scrubbing while paused, render a single frame at that time
+  useEffect(() => {
+    if (playing) return;
+    const time = useEditorStore.getState().currentTime;
+    if (grid.cols > 0 && sparkleRef.current && effectsRef.current.length > 0) {
+      const currentMask = maskGridRef.current;
+      const overlay = compositeFrame(effectsRef.current, 0.016, time, currentMask, grid);
+      sparkleRef.current.textContent = overlay;
+    }
+  });
 
   // Auto-play when effects are added
   useEffect(() => {
@@ -258,31 +268,62 @@ export function Canvas() {
     };
   }
 
-  function paintAt(e: React.MouseEvent) {
+  function paintStroke(x: number, y: number) {
     const m = useEditorStore.getState().mask;
     if (!m) return;
-    const coords = getMaskCoords(e);
-    if (!coords) return;
     const value = activeTool === "brush-fg" ? 0 : 255;
-    const scaledBrush = Math.floor(brushSize * (imgSize.w / (containerRef.current?.getBoundingClientRect().width || 1)));
-    m.paintBrush(coords.x, coords.y, scaledBrush, value, maskFeather);
+    const scale = imgSize.w / (containerRef.current?.getBoundingClientRect().width || 1);
+    const r = Math.floor(brushSize * scale);
+
+    const prev = lastPaintRef.current;
+    if (prev) {
+      // Bresenham line interpolation between last and current point
+      let dx = Math.abs(x - prev.x);
+      let dy = Math.abs(y - prev.y);
+      const sx = prev.x < x ? 1 : -1;
+      const sy = prev.y < y ? 1 : -1;
+      let err = dx - dy;
+      let cx = prev.x, cy = prev.y;
+      const step = Math.max(1, Math.floor(r * 0.4)); // step by fraction of radius
+
+      let steps = 0;
+      while (true) {
+        if (steps % step === 0 || (cx === x && cy === y)) {
+          m.paintBrush(cx, cy, r, value, maskFeather);
+        }
+        if (cx === x && cy === y) break;
+        const e2 = 2 * err;
+        if (e2 > -dy) { err -= dy; cx += sx; }
+        if (e2 < dx) { err += dx; cy += sy; }
+        steps++;
+        if (steps > 100000) break; // safety
+      }
+    } else {
+      m.paintBrush(x, y, r, value, maskFeather);
+    }
+
+    lastPaintRef.current = { x, y };
     bumpMaskVersion();
   }
 
   function handlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
     if (activeTool !== "brush-fg" && activeTool !== "brush-bg") return;
     isPaintingRef.current = true;
+    lastPaintRef.current = null;
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
-    paintAt(e);
+    const coords = getMaskCoords(e);
+    if (coords) paintStroke(coords.x, coords.y);
   }
 
   function handlePointerMove(e: React.PointerEvent<HTMLDivElement>) {
     if (!isPaintingRef.current) return;
-    paintAt(e);
+    const coords = getMaskCoords(e);
+    if (coords) paintStroke(coords.x, coords.y);
   }
 
   function handlePointerUp() {
     isPaintingRef.current = false;
+    lastPaintRef.current = null;
   }
 
   // Drag and drop
@@ -387,46 +428,43 @@ export function Canvas() {
               `,
             }}
           />
-          {showAscii && (
-            <pre
-              ref={asciiRef}
-              className="ascii-overlay"
-              style={{
-                ...preStyle,
-                position: "absolute",
-                inset: 0,
-                color: scene.ascii.color,
-                opacity: scene.ascii.opacity,
-                mixBlendMode: scene.ascii.blendMode as React.CSSProperties["mixBlendMode"],
-                zIndex: 2,
-              }}
-            />
-          )}
-          {showEffects && (
-            <pre
-              ref={sparkleRef}
-              className="ascii-sparkle"
-              style={{
-                ...preStyle,
-                position: "absolute",
-                inset: 0,
-                zIndex: 3,
-              }}
-            />
-          )}
-          {showMask && (
-            <canvas
-              ref={maskOverlayRef}
-              style={{
-                position: "absolute",
-                inset: 0,
-                width: "100%",
-                height: "100%",
-                zIndex: 4,
-                pointerEvents: "none",
-              }}
-            />
-          )}
+          <pre
+            ref={asciiRef}
+            className="ascii-overlay"
+            style={{
+              ...preStyle,
+              position: "absolute",
+              inset: 0,
+              color: scene.ascii.color,
+              opacity: scene.ascii.opacity,
+              mixBlendMode: scene.ascii.blendMode as React.CSSProperties["mixBlendMode"],
+              zIndex: 2,
+              visibility: showAscii ? "visible" : "hidden",
+            }}
+          />
+          <pre
+            ref={sparkleRef}
+            className="ascii-sparkle"
+            style={{
+              ...preStyle,
+              position: "absolute",
+              inset: 0,
+              zIndex: 3,
+              visibility: showEffects ? "visible" : "hidden",
+            }}
+          />
+          <canvas
+            ref={maskOverlayRef}
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              zIndex: 4,
+              pointerEvents: "none",
+              visibility: showMask ? "visible" : "hidden",
+            }}
+          />
         </div>
       )}
 
