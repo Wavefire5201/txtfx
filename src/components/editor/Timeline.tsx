@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useState, useEffect } from "react";
 import { useEditorStore } from "@/lib/store";
 import { EFFECT_LABELS } from "@/engine/effects";
 import { SkipBack, Play, Pause, SkipForward, Repeat, RepeatOnce } from "@phosphor-icons/react";
@@ -12,7 +12,9 @@ export function Timeline() {
   const currentTime = useEditorStore((s) => s.currentTime);
   const setCurrentTime = useEditorStore((s) => s.setCurrentTime);
   const updatePlayback = useEditorStore((s) => s.updatePlayback);
+  const updateEffect = useEditorStore((s) => s.updateEffect);
   const rulerRef = useRef<HTMLDivElement>(null);
+  const [dragging, setDragging] = useState<{ id: string; edge: "start" | "end" | "move"; startX: number; origStart: number; origEnd: number | null } | null>(null);
 
   function formatTime(t: number): string {
     const m = Math.floor(t / 60);
@@ -66,8 +68,37 @@ export function Timeline() {
     setPlaying(false);
   }
 
+  useEffect(() => {
+    if (!dragging) return;
+    const ruler = rulerRef.current;
+    if (!ruler) return;
+
+    const handleMove = (e: MouseEvent) => {
+      const rect = ruler.getBoundingClientRect();
+      const deltaX = e.clientX - dragging.startX;
+      const deltaPct = deltaX / rect.width;
+      const deltaTime = deltaPct * duration;
+
+      if (dragging.edge === "start") {
+        const newStart = Math.max(0, Math.min(dragging.origEnd ?? duration, dragging.origStart + deltaTime));
+        updateEffect(dragging.id, { timeline: { start: Math.round(newStart * 10) / 10, end: dragging.origEnd, loop: true } });
+      } else if (dragging.edge === "end") {
+        const newEnd = Math.max(dragging.origStart, Math.min(duration, (dragging.origEnd ?? duration) + deltaTime));
+        updateEffect(dragging.id, { timeline: { start: dragging.origStart, end: Math.round(newEnd * 10) / 10, loop: true } });
+      }
+    };
+
+    const handleUp = () => setDragging(null);
+    document.addEventListener("mousemove", handleMove);
+    document.addEventListener("mouseup", handleUp);
+    return () => {
+      document.removeEventListener("mousemove", handleMove);
+      document.removeEventListener("mouseup", handleUp);
+    };
+  }, [dragging, duration, updateEffect]);
+
   return (
-    <div className="timeline">
+    <div className="timeline" role="region" aria-label="Timeline">
       <div className="timeline-controls">
         <button className="timeline-btn" onClick={handleSkipBack} title="Skip to start">
           <SkipBack size={14} weight="fill" />
@@ -76,6 +107,7 @@ export function Timeline() {
           className="timeline-btn timeline-btn-play"
           onClick={() => setPlaying(!playing)}
           title={playing ? "Pause" : "Play"}
+          aria-label={playing ? "Pause" : "Play"}
         >
           {playing ? <Pause size={16} weight="fill" /> : <Play size={16} weight="fill" />}
         </button>
@@ -98,8 +130,31 @@ export function Timeline() {
             <RepeatOnce size={14} />
           )}
         </button>
-        <span style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: 8 }}>
-          {scene.playback.fps} fps
+        <span className="toolbar-sep">|</span>
+        <span className="timeline-setting">
+          <label className="timeline-setting-label">Duration</label>
+          <input
+            type="number"
+            className="timeline-setting-input"
+            value={scene.playback.duration}
+            min={1}
+            max={120}
+            step={1}
+            onChange={(e) => updatePlayback({ duration: Math.max(1, Number(e.target.value) || 10) })}
+          />
+          <span className="timeline-setting-unit">s</span>
+        </span>
+        <span className="timeline-setting">
+          <label className="timeline-setting-label">FPS</label>
+          <input
+            type="number"
+            className="timeline-setting-input"
+            value={scene.playback.fps}
+            min={1}
+            max={60}
+            step={1}
+            onChange={(e) => updatePlayback({ fps: Math.max(1, Math.min(60, Number(e.target.value) || 30)) })}
+          />
         </span>
       </div>
 
@@ -143,19 +198,37 @@ export function Timeline() {
           </div>
 
           {/* Effect bars */}
-          {scene.effects.map((fx) => (
-            <div key={fx.id} className="timeline-bar">
-              <div
-                className={`timeline-bar-fill ${!fx.enabled ? "timeline-bar-fill--disabled" : ""}`}
-                style={{
-                  width: fx.timeline.end
-                    ? `${((fx.timeline.end - fx.timeline.start) / duration) * 100}%`
-                    : "100%",
-                  marginLeft: `${(fx.timeline.start / duration) * 100}%`,
-                }}
-              />
-            </div>
-          ))}
+          {scene.effects.map((fx) => {
+            const startPct = (fx.timeline.start / duration) * 100;
+            const endPct = fx.timeline.end ? (fx.timeline.end / duration) * 100 : 100;
+            const widthPct = endPct - startPct;
+
+            return (
+              <div key={fx.id} className="timeline-bar">
+                <div
+                  className={`timeline-bar-fill ${!fx.enabled ? "timeline-bar-fill--disabled" : ""}`}
+                  style={{ width: `${widthPct}%`, marginLeft: `${startPct}%` }}
+                >
+                  <div
+                    className="timeline-bar-handle timeline-bar-handle--start"
+                    onMouseDown={(e) => {
+                      e.stopPropagation();
+                      const startX = e.clientX;
+                      setDragging({ id: fx.id, edge: "start", startX, origStart: fx.timeline.start, origEnd: fx.timeline.end });
+                    }}
+                  />
+                  <div
+                    className="timeline-bar-handle timeline-bar-handle--end"
+                    onMouseDown={(e) => {
+                      e.stopPropagation();
+                      const startX = e.clientX;
+                      setDragging({ id: fx.id, edge: "end", startX, origStart: fx.timeline.start, origEnd: fx.timeline.end });
+                    }}
+                  />
+                </div>
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

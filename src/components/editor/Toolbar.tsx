@@ -4,16 +4,24 @@ import { useRef, useState } from "react";
 import { useEditorStore } from "@/lib/store";
 import { exportStandaloneHTML } from "@/engine/export/html";
 import { exportEmbedSnippet } from "@/engine/export/embed";
-import type { SceneData } from "@/engine/scene";
+import { type SceneData, createDefaultScene } from "@/engine/scene";
+import { Mask } from "@/engine/mask";
 import { toast } from "./Toast";
+import { ConfirmDialog } from "./ConfirmDialog";
 import {
   FolderOpen,
   Export,
   FileHtml,
   Code,
   FileArrowDown,
+  FileArrowUp,
   Share,
   CaretDown,
+  ArrowCounterClockwise,
+  ArrowClockwise,
+  Trash,
+  Sun,
+  Moon,
 } from "@phosphor-icons/react";
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -27,10 +35,27 @@ function downloadBlob(blob: Blob, filename: string) {
 
 export function Toolbar() {
   const fileRef = useRef<HTMLInputElement>(null);
+  const sceneFileRef = useRef<HTMLInputElement>(null);
   const setImageUrl = useEditorStore((s) => s.setImageUrl);
+  const setScene = useEditorStore((s) => s.setScene);
   const scene = useEditorStore((s) => s.scene);
   const imageUrl = useEditorStore((s) => s.imageUrl);
+  const mask = useEditorStore((s) => s.mask);
+  const maskFeather = useEditorStore((s) => s.maskFeather);
+  const undo = useEditorStore((s) => s.undo);
+  const redo = useEditorStore((s) => s.redo);
+  const canUndo = useEditorStore((s) => s.canUndo);
+  const canRedo = useEditorStore((s) => s.canRedo);
   const [exportOpen, setExportOpen] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [exporting, setExporting] = useState(false);
+  const [lightMode, setLightMode] = useState(false);
+
+  function toggleTheme() {
+    const next = !lightMode;
+    setLightMode(next);
+    document.documentElement.classList.toggle("light-mode", next);
+  }
 
   function getExportScene(): SceneData {
     return {
@@ -38,6 +63,10 @@ export function Toolbar() {
       image: {
         ...scene.image,
         data: imageUrl || "",
+      },
+      mask: {
+        data: mask ? mask.toBase64() : "",
+        feather: maskFeather,
       },
     };
   }
@@ -51,36 +80,84 @@ export function Toolbar() {
     e.target.value = "";
   }
 
+  function handleOpenScene(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const data = JSON.parse(reader.result as string);
+        if (!data.version) { toast("Invalid scene file", "warning"); return; }
+        // Extract image from scene data if present
+        if (data.image?.data) {
+          setImageUrl(data.image.data);
+        }
+        setScene(data);
+        // Restore mask if present
+        if (data.mask?.data && data.image?.width) {
+          const restored = await Mask.fromBase64(data.mask.data, data.image.width, data.image.height);
+          useEditorStore.getState().setMask(restored);
+          useEditorStore.getState().bumpMaskVersion();
+        }
+        toast("Scene loaded");
+      } catch {
+        toast("Could not parse scene file", "warning");
+      }
+    };
+    reader.readAsText(file);
+    e.target.value = "";
+  }
+
+  function handleReset() {
+    setScene(createDefaultScene());
+    setImageUrl("");
+    localStorage.removeItem("txtfx-autosave");
+    toast("Canvas reset");
+  }
+
   function handleExportJSON() {
     const blob = new Blob([JSON.stringify(getExportScene(), null, 2)], { type: "application/json" });
-    downloadBlob(blob, "scene.txtfx");
+    downloadBlob(blob, `txtfx-${new Date().toISOString().slice(0, 10)}.txtfx`);
     setExportOpen(false);
     toast("Scene exported as JSON");
   }
 
-  function handleExportHTML() {
+  async function handleExportHTML() {
+    setExporting(true);
+    setExportOpen(false);
+    await new Promise(r => setTimeout(r, 0));
     const html = exportStandaloneHTML(getExportScene());
     const blob = new Blob([html], { type: "text/html" });
-    downloadBlob(blob, "scene.html");
-    setExportOpen(false);
+    downloadBlob(blob, `txtfx-${new Date().toISOString().slice(0, 10)}.html`);
+    setExporting(false);
     toast("Exported as standalone HTML");
   }
 
-  function handleExportEmbed() {
+  async function handleExportEmbed() {
+    setExporting(true);
+    setExportOpen(false);
+    await new Promise(r => setTimeout(r, 0));
     const snippet = exportEmbedSnippet(getExportScene());
     navigator.clipboard.writeText(snippet).then(() => {
       toast("Embed snippet copied to clipboard");
     }).catch(() => {
       toast("Could not copy to clipboard", "warning");
     });
-    setExportOpen(false);
+    setExporting(false);
   }
 
   function handleShare() {
-    const json = JSON.stringify(getExportScene());
-    const blob = new Blob([json], { type: "application/json" });
-    downloadBlob(blob, "scene.txtfx");
-    toast("Scene file downloaded for sharing");
+    const shareScene = { ...getExportScene(), image: { ...getExportScene().image, data: "" } };
+    const json = JSON.stringify(shareScene);
+    const encoded = btoa(unescape(encodeURIComponent(json)));
+    const url = `${window.location.origin}/editor#scene=${encoded}`;
+    navigator.clipboard.writeText(url).then(() => {
+      toast("Share link copied to clipboard");
+    }).catch(() => {
+      const blob = new Blob([JSON.stringify(getExportScene(), null, 2)], { type: "application/json" });
+      downloadBlob(blob, `txtfx-${new Date().toISOString().slice(0, 10)}.txtfx`);
+      toast("Share link failed — scene file downloaded instead");
+    });
   }
 
   return (
@@ -94,13 +171,39 @@ export function Toolbar() {
       </button>
       <input ref={fileRef} type="file" accept="image/*" hidden onChange={handleFile} />
 
+      <button className="toolbar-item" onClick={() => sceneFileRef.current?.click()}>
+        <FileArrowUp size={14} style={{ marginRight: 4 }} />
+        Open Scene
+      </button>
+      <input ref={sceneFileRef} type="file" accept=".txtfx,.json" hidden onChange={handleOpenScene} />
+
+      <span className="toolbar-sep">|</span>
+      <button className="toolbar-item" onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)" suppressHydrationWarning>
+        <ArrowCounterClockwise size={14} />
+      </button>
+      <button className="toolbar-item" onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Shift+Z)" suppressHydrationWarning>
+        <ArrowClockwise size={14} />
+      </button>
+      <button className="toolbar-item" onClick={() => setResetOpen(true)} title="Reset canvas">
+        <Trash size={14} />
+      </button>
+      <ConfirmDialog
+        open={resetOpen}
+        onOpenChange={setResetOpen}
+        title="Reset canvas"
+        description="This will clear all effects, settings, and the current image. This action cannot be undone."
+        confirmLabel="Reset"
+        onConfirm={handleReset}
+      />
+
       <div className="toolbar-dropdown-wrap">
         <button
           className="toolbar-item"
           onClick={() => setExportOpen(!exportOpen)}
+          disabled={exporting}
         >
           <Export size={14} style={{ marginRight: 4 }} />
-          Export
+          {exporting ? "Exporting..." : "Export"}
           <CaretDown size={10} style={{ marginLeft: 4, opacity: 0.5 }} />
         </button>
 
@@ -126,6 +229,10 @@ export function Toolbar() {
       </div>
 
       <div className="toolbar-spacer" />
+
+      <button className="toolbar-item" onClick={toggleTheme} title={lightMode ? "Dark mode" : "Light mode"}>
+        {lightMode ? <Moon size={14} /> : <Sun size={14} />}
+      </button>
 
       <button className="toolbar-share" onClick={handleShare}>
         <Share size={14} style={{ marginRight: 6 }} />

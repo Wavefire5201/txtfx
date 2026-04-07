@@ -22,11 +22,6 @@ export interface SceneData {
     feather: number;
   };
   effects: EffectConfig[];
-  style: {
-    tint: string;
-    vignette: number;
-    fallbackBg: string;
-  };
   playback: {
     duration: number;
     fps: number;
@@ -64,11 +59,6 @@ export function createDefaultScene(): SceneData {
     },
     mask: { data: "", feather: 4 },
     effects: [],
-    style: {
-      tint: "rgba(180, 70, 90, 0.1)",
-      vignette: 0.45,
-      fallbackBg: "auto",
-    },
     playback: {
       duration: 10,
       fps: 30,

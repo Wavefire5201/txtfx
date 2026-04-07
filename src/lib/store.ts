@@ -12,7 +12,6 @@ interface EditorState {
   scene: SceneData;
   setScene: (scene: SceneData) => void;
   updateAscii: (updates: Partial<SceneData["ascii"]>) => void;
-  updateStyle: (updates: Partial<SceneData["style"]>) => void;
   updatePlayback: (updates: Partial<SceneData["playback"]>) => void;
 
   // Image
@@ -30,6 +29,7 @@ interface EditorState {
   // Mask
   mask: Mask | null;
   initMask: (width: number, height: number) => void;
+  setMask: (mask: Mask) => void;
   maskVersion: number;
   bumpMaskVersion: () => void;
   maskFeather: number;
@@ -54,20 +54,47 @@ interface EditorState {
   showImage: boolean;
   toggleLayer: (layer: "mask" | "ascii" | "effects" | "image") => void;
 
+  // Zoom
+  zoom: number;
+  setZoom: (zoom: number) => void;
+
+  // Pan
+  panX: number;
+  panY: number;
+  setPan: (x: number, y: number) => void;
+
   // UI
   expandedEffects: Set<string>;
   toggleExpandEffect: (id: string) => void;
+
+  // Undo/Redo
+  undo: () => void;
+  redo: () => void;
+  canUndo: boolean;
+  canRedo: boolean;
 }
 
 let effectCounter = 0;
+
+const MAX_HISTORY = 50;
+let _history: SceneData[] = [];
+let _historyIndex = -1;
+let _skipHistory = false;
+
+function pushHistory(scene: SceneData) {
+  if (_skipHistory) return;
+  // Truncate any redo states
+  _history = _history.slice(0, _historyIndex + 1);
+  _history.push(JSON.parse(JSON.stringify(scene)));
+  if (_history.length > MAX_HISTORY) _history.shift();
+  _historyIndex = _history.length - 1;
+}
 
 export const useEditorStore = create<EditorState>((set) => ({
   scene: createDefaultScene(),
   setScene: (scene) => set({ scene }),
   updateAscii: (updates) =>
     set((s) => ({ scene: { ...s.scene, ascii: { ...s.scene.ascii, ...updates } } })),
-  updateStyle: (updates) =>
-    set((s) => ({ scene: { ...s.scene, style: { ...s.scene.style, ...updates } } })),
   updatePlayback: (updates) =>
     set((s) => ({ scene: { ...s.scene, playback: { ...s.scene.playback, ...updates } } })),
 
@@ -134,6 +161,7 @@ export const useEditorStore = create<EditorState>((set) => ({
 
   mask: null,
   initMask: (width, height) => set({ mask: new Mask(width, height) }),
+  setMask: (mask) => set({ mask, maskVersion: 0 }),
   maskVersion: 0,
   bumpMaskVersion: () => set((s) => ({ maskVersion: s.maskVersion + 1 })),
   maskFeather: 4,
@@ -141,7 +169,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   brushSize: 24,
   setBrushSize: (size) => set({ brushSize: size }),
 
-  activeTool: "pan",
+  activeTool: "brush-fg",
   setActiveTool: (tool) => set({ activeTool: tool }),
 
   playing: false,
@@ -161,6 +189,13 @@ export const useEditorStore = create<EditorState>((set) => ({
       return { showImage: !s.showImage };
     }),
 
+  zoom: 1,
+  setZoom: (zoom) => set({ zoom: Math.max(0.25, Math.min(4, zoom)) }),
+
+  panX: 0,
+  panY: 0,
+  setPan: (x, y) => set({ panX: x, panY: y }),
+
   expandedEffects: new Set<string>(),
   toggleExpandEffect: (id) =>
     set((s) => {
@@ -169,4 +204,61 @@ export const useEditorStore = create<EditorState>((set) => ({
       else expanded.add(id);
       return { expandedEffects: expanded };
     }),
+
+  canUndo: false,
+  canRedo: false,
+  undo: () => set((s) => {
+    if (_historyIndex <= 0) return s;
+    _historyIndex--;
+    _skipHistory = true;
+    const restored = JSON.parse(JSON.stringify(_history[_historyIndex]));
+    _skipHistory = false;
+    return { scene: restored, canUndo: _historyIndex > 0, canRedo: true };
+  }),
+  redo: () => set((s) => {
+    if (_historyIndex >= _history.length - 1) return s;
+    _historyIndex++;
+    _skipHistory = true;
+    const restored = JSON.parse(JSON.stringify(_history[_historyIndex]));
+    _skipHistory = false;
+    return { scene: restored, canUndo: true, canRedo: _historyIndex < _history.length - 1 };
+  }),
 }));
+
+// Track scene changes for undo/redo
+let _lastSceneJson = "";
+useEditorStore.subscribe((state) => {
+  if (_skipHistory) return;
+  const json = JSON.stringify(state.scene);
+  if (json === _lastSceneJson) return;
+  _lastSceneJson = json;
+  pushHistory(state.scene);
+  // Update canUndo/canRedo flags
+  useEditorStore.setState({
+    canUndo: _historyIndex > 0,
+    canRedo: false, // New action clears redo
+  });
+});
+
+// Auto-save to localStorage (debounced)
+let saveTimeout: ReturnType<typeof setTimeout>;
+useEditorStore.subscribe((state, prevState) => {
+  // Only save when scene, imageUrl, or mask changes
+  if (state.scene === prevState.scene && state.imageUrl === prevState.imageUrl && state.maskVersion === prevState.maskVersion) return;
+  clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(() => {
+    try {
+      const m = state.mask;
+      const data = {
+        scene: state.scene,
+        imageUrl: state.imageUrl,
+        maskData: m ? m.toBase64() : "",
+        maskWidth: m ? m.width : 0,
+        maskHeight: m ? m.height : 0,
+      };
+      localStorage.setItem("txtfx-autosave", JSON.stringify(data));
+    } catch {
+      // localStorage full or unavailable — ignore
+    }
+  }, 1000);
+});

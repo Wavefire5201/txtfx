@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import * as Slider from "@radix-ui/react-slider";
 import { useEditorStore } from "@/lib/store";
 import {
@@ -11,8 +12,10 @@ import {
   EyeSlash,
   Eraser,
 } from "@phosphor-icons/react";
+import { ConfirmDialog } from "./ConfirmDialog";
 
 export function ToolPanel() {
+  const [clearMaskOpen, setClearMaskOpen] = useState(false);
   const activeTool = useEditorStore((s) => s.activeTool);
   const setActiveTool = useEditorStore((s) => s.setActiveTool);
   const brushSize = useEditorStore((s) => s.brushSize);
@@ -42,7 +45,7 @@ export function ToolPanel() {
   }
 
   return (
-    <div className="panel">
+    <div className="panel" role="complementary" aria-label="Tools and layers">
       <div className="panel-section">
         <div className="panel-label">Tools</div>
         <div className="tool-grid">
@@ -51,6 +54,7 @@ export function ToolPanel() {
               key={t.id}
               className={`tool-btn ${activeTool === t.id ? "tool-btn--active" : ""}`}
               title={t.title}
+              aria-label={t.title}
               onClick={() => setActiveTool(t.id)}
             >
               {t.icon}
@@ -111,10 +115,18 @@ export function ToolPanel() {
           <Slider.Thumb className="slider-thumb" />
         </Slider.Root>
 
-        <button className="mask-clear-btn" onClick={handleClearMask}>
+        <button className="mask-clear-btn" onClick={() => setClearMaskOpen(true)}>
           <Eraser size={12} />
           <span>Clear mask</span>
         </button>
+        <ConfirmDialog
+          open={clearMaskOpen}
+          onOpenChange={setClearMaskOpen}
+          title="Clear mask"
+          description="This will reset the entire mask to background. Painted foreground regions will be lost."
+          confirmLabel="Clear"
+          onConfirm={handleClearMask}
+        />
       </div>
 
       <div className="panel-section">
@@ -127,6 +139,8 @@ export function ToolPanel() {
           <div
             key={layer.key}
             className={`layer-item ${layer.active ? "layer-item--active" : ""}`}
+            role="button"
+            aria-pressed={layer.active}
             onClick={() => toggleLayer(layer.key)}
           >
             <span>{layer.label}</span>
@@ -138,6 +152,8 @@ export function ToolPanel() {
         <div
           key="image"
           className={`layer-item ${showImage ? "layer-item--active" : ""}`}
+          role="button"
+          aria-pressed={showImage}
           onClick={() => toggleLayer("image")}
         >
           <span>Source Image</span>
@@ -156,6 +172,8 @@ export function ToolPanel() {
           <div className="shortcut-item"><kbd>V</kbd><span>Pan tool</span></div>
           <div className="shortcut-item"><kbd>M</kbd><span>Toggle mask</span></div>
           <div className="shortcut-item"><kbd>[ ]</kbd><span>Brush size</span></div>
+          <div className="shortcut-item"><kbd>⌘Z</kbd><span>Undo</span></div>
+          <div className="shortcut-item"><kbd>⌘⇧Z</kbd><span>Redo</span></div>
         </div>
       </div>
     </div>

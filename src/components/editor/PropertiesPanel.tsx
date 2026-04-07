@@ -6,6 +6,26 @@ import * as Slider from "@radix-ui/react-slider";
 import { useEditorStore } from "@/lib/store";
 import { createEffect, EFFECT_LABELS, type EffectType } from "@/engine/effects";
 import type { ControlDescriptor } from "@/engine/effects/types";
+import { toast } from "./Toast";
+
+function getPresets(type: string): Record<string, Record<string, unknown>> {
+  try {
+    const saved = localStorage.getItem(`txtfx-presets-${type}`);
+    return saved ? JSON.parse(saved) : {};
+  } catch { return {}; }
+}
+
+function savePreset(type: string, name: string, params: Record<string, unknown>) {
+  const presets = getPresets(type);
+  presets[name] = { ...params };
+  localStorage.setItem(`txtfx-presets-${type}`, JSON.stringify(presets));
+}
+
+function deletePreset(type: string, name: string) {
+  const presets = getPresets(type);
+  delete presets[name];
+  localStorage.setItem(`txtfx-presets-${type}`, JSON.stringify(presets));
+}
 import {
   CaretDown,
   CaretRight,
@@ -23,6 +43,7 @@ import {
   Terminal,
   Fire,
   Gear,
+  DotsSixVertical,
 } from "@phosphor-icons/react";
 
 const ALL_EFFECT_TYPES: EffectType[] = [
@@ -177,11 +198,14 @@ export function PropertiesPanel() {
   const updateEffectParams = useEditorStore((s) => s.updateEffectParams);
   const expandedEffects = useEditorStore((s) => s.expandedEffects);
   const toggleExpandEffect = useEditorStore((s) => s.toggleExpandEffect);
+  const reorderEffect = useEditorStore((s) => s.reorderEffect);
 
   const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   return (
-    <div className="panel properties-panel">
+    <div className="panel properties-panel" role="complementary" aria-label="Effect properties">
       <div className="panel-section">
         <div className="panel-label">ASCII Settings</div>
         <div className="prop-row">
@@ -215,23 +239,65 @@ export function PropertiesPanel() {
             <option value="normal">Normal</option>
           </select>
         </div>
+
+        <div className="prop-row" style={{ marginTop: 8 }}>
+          <span className="prop-label">Char ramp</span>
+        </div>
+        <input
+          className="effect-text-input"
+          style={{ width: "100%", fontFamily: "monospace", fontSize: 11, marginTop: 4 }}
+          type="text"
+          value={scene.ascii.ramp}
+          onChange={(e) => updateAscii({ ramp: e.target.value })}
+          title="Characters from dark to light"
+        />
+
+        <div className="prop-row" style={{ marginTop: 8 }}>
+          <span className="prop-label">Font size</span>
+          <span className="prop-value">{scene.ascii.fontSize}</span>
+        </div>
+        <Slider.Root
+          className="slider-root"
+          value={[parseFloat(scene.ascii.fontSize) || 0.85]}
+          min={0.4}
+          max={2}
+          step={0.05}
+          onValueChange={([v]) => updateAscii({ fontSize: `${v}vw` })}
+        >
+          <Slider.Track className="slider-track">
+            <Slider.Range className="slider-range" />
+          </Slider.Track>
+          <Slider.Thumb className="slider-thumb" />
+        </Slider.Root>
       </div>
 
       <div className="panel-section panel-section--effects">
         <div className="panel-label">Effects</div>
         <div className="effects-list">
-          {scene.effects.map((fx) => {
+          {scene.effects.map((fx, idx) => {
             const meta = EFFECT_LABELS[fx.type];
             const isExpanded = expandedEffects.has(fx.id);
             const controls = getControlsForType(fx.type);
 
             return (
-              <div key={fx.id} className={`effect-card ${isExpanded ? "effect-card--expanded" : ""}`}>
+              <div
+                key={fx.id}
+                className={`effect-card ${isExpanded ? "effect-card--expanded" : ""} ${dragOverIndex === idx ? "effect-card--drag-over" : ""}`}
+                draggable
+                onDragStart={(e) => { setDragIndex(idx); e.dataTransfer.effectAllowed = "move"; }}
+                onDragOver={(e) => { e.preventDefault(); setDragOverIndex(idx); }}
+                onDragLeave={() => setDragOverIndex(null)}
+                onDrop={() => { if (dragIndex !== null && dragIndex !== idx) reorderEffect(dragIndex, idx); setDragIndex(null); setDragOverIndex(null); }}
+                onDragEnd={() => { setDragIndex(null); setDragOverIndex(null); }}
+              >
                 <div
                   className="effect-card-header"
                   onClick={() => toggleExpandEffect(fx.id)}
                 >
                   <div className="effect-card-title">
+                    <span className="effect-card-drag" onMouseDown={(e) => e.stopPropagation()}>
+                      <DotsSixVertical size={12} weight="bold" />
+                    </span>
                     <span className="effect-card-caret">
                       {isExpanded ? <CaretDown size={10} /> : <CaretRight size={10} />}
                     </span>
@@ -286,6 +352,19 @@ export function PropertiesPanel() {
                       </Switch.Root>
                     </div>
 
+                    <div className="effect-card-region">
+                      <span className="prop-label">Loop effect</span>
+                      <Switch.Root
+                        className="switch-root"
+                        checked={fx.timeline.loop}
+                        onCheckedChange={(checked) =>
+                          updateEffect(fx.id, { timeline: { ...fx.timeline, loop: checked } })
+                        }
+                      >
+                        <Switch.Thumb className="switch-thumb" />
+                      </Switch.Root>
+                    </div>
+
                     {controls.map((ctrl) => (
                       <EffectControl
                         key={ctrl.key}
@@ -294,6 +373,50 @@ export function PropertiesPanel() {
                         onChange={(key, val) => updateEffectParams(fx.id, { [key]: val })}
                       />
                     ))}
+
+                    <div className="effect-presets">
+                      <div className="prop-row" style={{ marginTop: 8 }}>
+                        <span className="prop-label">Presets</span>
+                        <button
+                          className="preset-save-btn"
+                          onClick={() => {
+                            const name = prompt("Preset name:");
+                            if (name) {
+                              savePreset(fx.type, name, fx.params);
+                              toast(`Preset "${name}" saved`);
+                            }
+                          }}
+                        >
+                          Save
+                        </button>
+                      </div>
+                      {Object.keys(getPresets(fx.type)).length > 0 && (
+                        <div className="preset-list">
+                          {Object.entries(getPresets(fx.type)).map(([name, params]) => (
+                            <div key={name} className="preset-item">
+                              <button
+                                className="preset-load-btn"
+                                onClick={() => {
+                                  updateEffectParams(fx.id, params);
+                                  toast(`Loaded "${name}"`);
+                                }}
+                              >
+                                {name}
+                              </button>
+                              <button
+                                className="preset-delete-btn"
+                                onClick={() => {
+                                  deletePreset(fx.type, name);
+                                  toast(`Deleted "${name}"`);
+                                }}
+                              >
+                                ×
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
 
                     <button
                       className="effect-remove-btn"

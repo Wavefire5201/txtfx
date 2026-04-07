@@ -2,11 +2,13 @@
 
 import { useRef, useEffect, useCallback, useState } from "react";
 import { useEditorStore } from "@/lib/store";
+import { Mask } from "@/engine/mask";
 import { measureGrid, imageToAscii, sampleMeanColor } from "@/engine/ascii";
 import { createEffect } from "@/engine/effects";
 import { compositeFrame, type ActiveEffect, type GlowCell } from "@/engine/renderer";
 import type { GridInfo, MaskGrid } from "@/engine/effects/types";
 import { ImageSquare, UploadSimple } from "@phosphor-icons/react";
+import { toast } from "./Toast";
 import type { TypewriterEffect } from "@/engine/effects/typewriter";
 import type { DecodeEffect } from "@/engine/effects/decode";
 
@@ -38,6 +40,11 @@ export function Canvas() {
   const initMask = useEditorStore((s) => s.initMask);
   const maskVersion = useEditorStore((s) => s.maskVersion);
   const bumpMaskVersion = useEditorStore((s) => s.bumpMaskVersion);
+  const zoom = useEditorStore((s) => s.zoom);
+  const setZoom = useEditorStore((s) => s.setZoom);
+  const panX = useEditorStore((s) => s.panX);
+  const panY = useEditorStore((s) => s.panY);
+  const setPan = useEditorStore((s) => s.setPan);
 
   const [grid, setGrid] = useState<GridInfo>({ cols: 0, rows: 0, charW: 0, charH: 0, fontSize: 0 });
   const [imgSize, setImgSize] = useState({ w: 0, h: 0 });
@@ -54,6 +61,7 @@ export function Canvas() {
   const lastFrameTimeRef = useRef(0);
   const isPaintingRef = useRef(false);
   const lastPaintRef = useRef<{ x: number; y: number } | null>(null);
+  const panStartRef = useRef<{ x: number; y: number; startPanX: number; startPanY: number } | null>(null);
   const maskGridRef = useRef<MaskGrid>(EMPTY_MASK);
   const perfRef = useRef<HTMLDivElement>(null);
   const perfFrames = useRef(0);
@@ -61,6 +69,45 @@ export function Canvas() {
   const perfCells = useRef(0);
   const perfGlow = useRef(0);
   const lastFontRef = useRef("");
+
+  // Restore auto-saved scene on mount
+  useEffect(() => {
+    // Check for shared scene in URL hash
+    try {
+      const hash = window.location.hash;
+      if (hash.startsWith("#scene=")) {
+        const encoded = hash.slice(7);
+        const json = decodeURIComponent(escape(atob(encoded)));
+        const data = JSON.parse(json);
+        if (data.version) {
+          useEditorStore.getState().setScene(data);
+          if (data.image?.data) useEditorStore.getState().setImageUrl(data.image.data);
+          window.history.replaceState(null, "", window.location.pathname);
+          return; // Skip localStorage restore
+        }
+      }
+    } catch { /* invalid hash — ignore */ }
+
+    // Fall back to localStorage restore
+    try {
+      const saved = localStorage.getItem("txtfx-autosave");
+      if (!saved) return;
+      const data = JSON.parse(saved);
+      if (data.scene) {
+        useEditorStore.getState().setScene(data.scene);
+      }
+      if (data.imageUrl) {
+        useEditorStore.getState().setImageUrl(data.imageUrl);
+      }
+      if (data.maskData && data.maskWidth) {
+        Mask.fromBase64(data.maskData, data.maskWidth, data.maskHeight).then((restored) => {
+          useEditorStore.getState().setMask(restored);
+        }).catch(() => { /* corrupt mask data — ignore */ });
+      }
+    } catch {
+      // Invalid saved data — ignore
+    }
+  }, []);
 
   // Load image
   useEffect(() => {
@@ -441,6 +488,16 @@ export function Canvas() {
     }
   }, [scene.effects.length, imageUrl]);
 
+  useEffect(() => {
+    const handler = (e: BeforeUnloadEvent) => {
+      if (scene.effects.length > 0) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [scene.effects.length]);
+
   // Mask painting
   function getMaskCoords(e: React.MouseEvent): { x: number; y: number } | null {
     const container = containerRef.current;
@@ -493,6 +550,11 @@ export function Canvas() {
   }
 
   function handlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    if (activeTool === "pan") {
+      panStartRef.current = { x: e.clientX, y: e.clientY, startPanX: panX, startPanY: panY };
+      (e.target as HTMLElement).setPointerCapture(e.pointerId);
+      return;
+    }
     if (activeTool !== "brush-fg" && activeTool !== "brush-bg") return;
     isPaintingRef.current = true;
     lastPaintRef.current = null;
@@ -502,12 +564,19 @@ export function Canvas() {
   }
 
   function handlePointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    if (panStartRef.current) {
+      const dx = (e.clientX - panStartRef.current.x) / zoom;
+      const dy = (e.clientY - panStartRef.current.y) / zoom;
+      setPan(panStartRef.current.startPanX + dx, panStartRef.current.startPanY + dy);
+      return;
+    }
     if (!isPaintingRef.current) return;
     const coords = getMaskCoords(e);
     if (coords) paintStroke(coords.x, coords.y);
   }
 
   function handlePointerUp() {
+    panStartRef.current = null;
     isPaintingRef.current = false;
     lastPaintRef.current = null;
   }
@@ -532,7 +601,7 @@ export function Canvas() {
 
     const file = e.dataTransfer.files?.[0];
     if (!file || !file.type.startsWith("image/")) return;
-    if (file.size > 20 * 1024 * 1024) return; // 20MB limit
+    if (file.size > 20 * 1024 * 1024) { toast("Image too large (max 20MB)", "warning"); return; }
     const reader = new FileReader();
     reader.onload = () => setImageUrl(reader.result as string);
     reader.readAsDataURL(file);
@@ -544,7 +613,7 @@ export function Canvas() {
   function handleFileInput(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 20 * 1024 * 1024) return; // 20MB limit
+    if (file.size > 20 * 1024 * 1024) { toast("Image too large (max 20MB)", "warning"); return; }
     const reader = new FileReader();
     reader.onload = () => setImageUrl(reader.result as string);
     reader.readAsDataURL(file);
@@ -567,7 +636,7 @@ export function Canvas() {
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      style={{ cursor: isBrushTool ? "crosshair" : undefined }}
+      style={{ cursor: activeTool === "pan" ? "grab" : isBrushTool ? "crosshair" : undefined }}
     >
       {draggingOver && (
         <div className="drop-overlay">
@@ -587,7 +656,7 @@ export function Canvas() {
       ) : (
         <div
           className="viewport-canvas"
-          style={{ width: "100%", height: "100%", position: "relative" }}
+          style={{ width: "100%", height: "100%", position: "relative", transform: `scale(${zoom}) translate(${panX}px, ${panY}px)`, transformOrigin: "center center" }}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
@@ -672,7 +741,9 @@ export function Canvas() {
 
       {imageUrl && (
         <div className="viewport-info">
-          <span>100%</span>
+          <button className="zoom-btn" onClick={() => setZoom(zoom - 0.25)} title="Zoom out">−</button>
+          <span>{Math.round(zoom * 100)}%</span>
+          <button className="zoom-btn" onClick={() => setZoom(zoom + 0.25)} title="Zoom in">+</button>
           <span className="viewport-info-sep">|</span>
           <span>{imgSize.w} x {imgSize.h}</span>
           <span className="viewport-info-sep">|</span>

@@ -129,7 +129,14 @@ export function compositeFrame(
     if (time < fx.timelineStart) continue;
     if (fx.timelineEnd !== null && time > fx.timelineEnd) continue;
 
-    const effectTime = time - fx.timelineStart;
+    let effectTime = time - fx.timelineStart;
+    // Handle per-effect looping
+    if (fx.loop && fx.timelineEnd !== null) {
+      const effectDuration = fx.timelineEnd - fx.timelineStart;
+      if (effectDuration > 0) {
+        effectTime = effectTime % effectDuration;
+      }
+    }
     const cells = fx.instance.update(dt, effectTime, mask);
 
     for (const cell of cells) {
