@@ -4,9 +4,9 @@ export class ScanlineEffect implements AsciiEffect {
   type = "scanline";
   private grid: GridInfo = { cols: 0, rows: 0, charW: 0, charH: 0, fontSize: 0 };
   private speed = 8;
-  private width = 3;
+  private width = 2;
   private brightness = 1;
-  private count = 2;
+  private count = 1;
   private color = "#88ccff";
   private glowRadius = 16;
   private chars = "=-~";
@@ -15,9 +15,9 @@ export class ScanlineEffect implements AsciiEffect {
   init(grid: GridInfo, params: Record<string, unknown>): void {
     this.grid = grid;
     this.speed = (params.speed as number) ?? 8;
-    this.width = (params.width as number) ?? 3;
+    this.width = (params.width as number) ?? 2;
     this.brightness = (params.brightness as number) ?? 1;
-    this.count = (params.count as number) ?? 2;
+    this.count = (params.count as number) ?? 1;
     this.color = (params.color as string) ?? "#88ccff";
     this.glowRadius = (params.glowRadius as number) ?? 16;
     this.chars = (params.chars as string) ?? "=-~";
@@ -57,8 +57,8 @@ export class ScanlineEffect implements AsciiEffect {
   getControls(): ControlDescriptor[] {
     return [
       { key: "speed", label: "Speed", type: "slider", min: 1, max: 20, step: 0.5, defaultValue: 8 },
-      { key: "width", label: "Line width", type: "slider", min: 1, max: 8, step: 1, defaultValue: 3 },
-      { key: "count", label: "Line count", type: "slider", min: 1, max: 5, step: 1, defaultValue: 2 },
+      { key: "width", label: "Line width", type: "slider", min: 1, max: 8, step: 1, defaultValue: 2 },
+      { key: "count", label: "Line count", type: "slider", min: 1, max: 5, step: 1, defaultValue: 1 },
       { key: "brightness", label: "Brightness", type: "slider", min: 0.2, max: 1, step: 0.05, defaultValue: 1 },
       { key: "color", label: "Color", type: "color", defaultValue: "#88ccff" },
       { key: "glowRadius", label: "Glow radius", type: "slider", min: 0, max: 40, step: 1, defaultValue: 16 },

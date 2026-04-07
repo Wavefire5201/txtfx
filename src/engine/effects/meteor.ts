@@ -73,10 +73,8 @@ export class MeteorEffect implements AsciiEffect {
       m.r += this.dr * m.speed * dt;
 
       m.trail.push({ c: Math.round(m.c), r: Math.round(m.r), age: 0 });
-      // Use swap-pop instead of shift() to avoid O(n) copy
       while (m.trail.length > this.trailLength) {
-        m.trail[0] = m.trail[m.trail.length - 1];
-        m.trail.pop();
+        m.trail.shift();
       }
       for (const p of m.trail) p.age += dt;
 

@@ -55,13 +55,12 @@ export function Canvas() {
   const isPaintingRef = useRef(false);
   const lastPaintRef = useRef<{ x: number; y: number } | null>(null);
   const maskGridRef = useRef<MaskGrid>(EMPTY_MASK);
-  const glowSpriteRef = useRef<HTMLCanvasElement | null>(null);
-  const glowSpriteSizeRef = useRef(0);
   const perfRef = useRef<HTMLDivElement>(null);
   const perfFrames = useRef(0);
   const perfLastUpdate = useRef(0);
   const perfCells = useRef(0);
   const perfGlow = useRef(0);
+  const lastFontRef = useRef("");
 
   // Load image
   useEffect(() => {
@@ -102,19 +101,43 @@ export function Canvas() {
   // Rebuild effects when scene effects change
   useEffect(() => {
     const configs = scene.effects;
-    effectsRef.current = configs.map((cfg) => {
-      const instance = createEffect(cfg.type);
-      if (grid.cols > 0) instance.init(grid, cfg.params);
-      return {
-        instance,
-        maskRegion: cfg.maskRegion,
-        enabled: cfg.enabled,
-        timelineStart: cfg.timeline.start,
-        timelineEnd: cfg.timeline.end,
-        loop: cfg.timeline.loop,
-        applyToAscii: cfg.applyToAscii ?? false,
-      };
-    });
+    const prev = effectsRef.current;
+
+    // Check if we can reuse existing instances (same types in same order)
+    const canReuse = prev.length === configs.length &&
+      configs.every((cfg, i) => prev[i] && prev[i].instance.type === cfg.type);
+
+    if (canReuse) {
+      // Just update params and metadata on existing instances
+      effectsRef.current = configs.map((cfg, i) => {
+        const existing = prev[i];
+        if (grid.cols > 0) existing.instance.init(grid, cfg.params);
+        return {
+          ...existing,
+          maskRegion: cfg.maskRegion,
+          enabled: cfg.enabled,
+          timelineStart: cfg.timeline.start,
+          timelineEnd: cfg.timeline.end,
+          loop: cfg.timeline.loop,
+          applyToAscii: cfg.applyToAscii ?? false,
+        };
+      });
+    } else {
+      // Types changed — recreate all instances
+      effectsRef.current = configs.map((cfg) => {
+        const instance = createEffect(cfg.type);
+        if (grid.cols > 0) instance.init(grid, cfg.params);
+        return {
+          instance,
+          maskRegion: cfg.maskRegion,
+          enabled: cfg.enabled,
+          timelineStart: cfg.timeline.start,
+          timelineEnd: cfg.timeline.end,
+          loop: cfg.timeline.loop,
+          applyToAscii: cfg.applyToAscii ?? false,
+        };
+      });
+    }
     if (asciiTextRef.current) {
       feedBaseText(effectsRef.current, asciiTextRef.current);
     }
@@ -226,28 +249,7 @@ export function Canvas() {
     }
   }
 
-  function getGlowSprite(radius: number): HTMLCanvasElement {
-    const size = Math.ceil(radius * 2 + 4);
-    if (glowSpriteRef.current && glowSpriteSizeRef.current === size) {
-      return glowSpriteRef.current;
-    }
-    const c = document.createElement("canvas");
-    c.width = size;
-    c.height = size;
-    const sctx = c.getContext("2d")!;
-    const cx = size / 2;
-    const grad = sctx.createRadialGradient(cx, cx, 0, cx, cx, radius);
-    grad.addColorStop(0, "rgba(255,255,255,1)");
-    grad.addColorStop(0.4, "rgba(255,255,255,0.4)");
-    grad.addColorStop(1, "rgba(255,255,255,0)");
-    sctx.fillStyle = grad;
-    sctx.fillRect(0, 0, size, size);
-    glowSpriteRef.current = c;
-    glowSpriteSizeRef.current = size;
-    return c;
-  }
-
-  function renderGlow(glowCells: GlowCell[]) {
+  function renderGlow(glowCells: GlowCell[], count: number) {
     const canvas = glowCanvasRef.current;
     const container = containerRef.current;
     if (!canvas || !container) return;
@@ -270,13 +272,16 @@ export function Canvas() {
 
     if (needsResize) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    } else {
-      ctx.clearRect(0, 0, w, h);
     }
+    ctx.clearRect(0, 0, w, h);
 
-    if (glowCells.length === 0) return;
+    if (count === 0) return;
 
-    ctx.font = `${grid.fontSize}px ${scene.ascii.fontFamily}`;
+    const fontStr = `${grid.fontSize}px ${scene.ascii.fontFamily}`;
+    if (fontStr !== lastFontRef.current) {
+      ctx.font = fontStr;
+      lastFontRef.current = fontStr;
+    }
     ctx.textBaseline = "top";
     const padLeft = 8;
     const padTop = 10;
@@ -288,7 +293,7 @@ export function Canvas() {
     let glowMid = "";
     let glowFill = "";
 
-    for (const cell of glowCells) {
+    for (let i = 0; i < count; i++) { const cell = glowCells[i];
       const x = padLeft + cell.col * grid.charW;
       const y = padTop + cell.row * grid.charH;
       const cx = x + grid.charW * 0.5;
@@ -311,17 +316,19 @@ export function Canvas() {
 
       // Colored radial gradient glow
       const gr = cell.glowRadius ?? 18;
-      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, gr);
-      grad.addColorStop(0, glowCenter + (a * 0.7) + ")");
-      grad.addColorStop(0.4, glowMid + (a * 0.28) + ")");
-      grad.addColorStop(1, glowCenter + "0)");
-      ctx.fillStyle = grad;
-      ctx.fillRect(cx - gr, cy - gr, gr * 2, gr * 2);
+      if (gr > 0) {
+        const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, gr);
+        grad.addColorStop(0, glowCenter + (a * 0.7) + ")");
+        grad.addColorStop(0.4, glowMid + (a * 0.28) + ")");
+        grad.addColorStop(1, glowCenter + "0)");
+        ctx.fillStyle = grad;
+        ctx.fillRect(cx - gr, cy - gr, gr * 2, gr * 2);
+      }
 
       // Colored text with shadow
       ctx.fillStyle = glowFill;
       ctx.globalAlpha = Math.min(1, a * 0.95);
-      ctx.shadowBlur = 10;
+      ctx.shadowBlur = gr > 0 ? 10 : 0;
       ctx.fillText(cell.char, x, y);
       ctx.globalAlpha = 1;
     }
@@ -386,9 +393,9 @@ export function Canvas() {
         const currentMask = maskGridRef.current;
         const result = compositeFrame(effectsRef.current, dt, now, currentMask, grid, asciiTextRef.current);
         sparkleRef.current.textContent = result.text;
-        perfCells.current = result.glowCells.length;
-        renderGlow(result.glowCells);
-        perfGlow.current = result.glowCells.length;
+        perfCells.current = result.glowCount;
+        renderGlow(result.glowCells, result.glowCount);
+        perfGlow.current = result.glowCount;
       }
 
       // Update perf overlay (~2x/sec to avoid overhead)
@@ -413,22 +420,19 @@ export function Canvas() {
     };
   }, [playing, grid, scene.playback.duration, scene.playback.loop]);
 
-  // When scrubbing while paused, simulate up to that time and render
+  // When scrubbing while paused or editing effects while paused, re-render
   useEffect(() => {
     if (playing) return;
-
-    // Skip if time hasn't changed from what was last rendered (e.g., just paused)
-    if (Math.abs(currentTime - lastRenderedTimeRef.current) < 0.001) return;
-    lastRenderedTimeRef.current = currentTime;
 
     if (grid.cols > 0 && sparkleRef.current && effectsRef.current.length > 0) {
       simulateToTime(currentTime);
       const currentMask = maskGridRef.current;
       const result = compositeFrame(effectsRef.current, 0.016, currentTime, currentMask, grid, asciiTextRef.current);
       sparkleRef.current.textContent = result.text;
-      renderGlow(result.glowCells);
+      renderGlow(result.glowCells, result.glowCount);
     }
-  }, [playing, currentTime, grid]);
+    lastRenderedTimeRef.current = currentTime;
+  }, [playing, currentTime, grid, scene.effects]);
 
   // Auto-play when effects are added
   useEffect(() => {

@@ -23,6 +23,7 @@ export interface GlowCell {
 export interface CompositeResult {
   text: string;
   glowCells: GlowCell[];
+  glowCount: number;
 }
 
 // Reusable buffers - resized only when grid dimensions change
@@ -32,11 +33,18 @@ let _brightMap = new Float32Array(0);
 let _charMap = new Uint8Array(0);
 let _colorIndices = new Int16Array(0); // index into per-frame color table, -1 = no color
 let _asciiCodes = new Uint16Array(0); // char code, 0 = none
-let _radiusVals = new Float32Array(0); // 0 = no custom radius
+let _radiusVals = new Float32Array(0); // -1 = no custom radius
 let _cachedBaseText = "";
 let _cachedBaseLines: string[] = [];
 let _textBuf: string[] = [];
 
+const _chars: string[] = [" "];
+const _charIndex = new Map<string, number>();
+const _colorTable: string[] = [];
+const _colorLookup = new Map<string, number>();
+
+let _glowPool: GlowCell[] = [];
+let _glowCount = 0;
 
 /**
  * Composites effect cells into a sparkle overlay string.
@@ -63,12 +71,13 @@ export function compositeFrame(
     _asciiCodes = new Uint16Array(total);
     _radiusVals = new Float32Array(total);
     _colorIndices.fill(-1);
+    _radiusVals.fill(-1);
   } else {
     _brightMap.fill(0);
     _charMap.fill(0);
     _colorIndices.fill(-1);
     _asciiCodes.fill(0);
-    _radiusVals.fill(0);
+    _radiusVals.fill(-1);
   }
 
   // Cache baseText split
@@ -83,9 +92,16 @@ export function compositeFrame(
   const asciiCodes = _asciiCodes;
   const radiusVals = _radiusVals;
   const baseLines = _cachedBaseLines;
-  const chars: string[] = [" "];
-  const charIndex = new Map<string, number>();
-  charIndex.set(" ", 0);
+  // Reset reusable lookup structures
+  _chars.length = 1; _chars[0] = " ";
+  _charIndex.clear(); _charIndex.set(" ", 0);
+  _colorTable.length = 0;
+  _colorLookup.clear();
+
+  const chars = _chars;
+  const charIndex = _charIndex;
+  const colorTable = _colorTable;
+  const colorLookup = _colorLookup;
 
   function getCharIdx(ch: string): number {
     let idx = charIndex.get(ch);
@@ -97,8 +113,6 @@ export function compositeFrame(
     return idx;
   }
 
-  const colorTable: string[] = [];
-  const colorLookup = new Map<string, number>();
   function getColorIdx(color: string): number {
     let idx = colorLookup.get(color);
     if (idx === undefined) {
@@ -135,7 +149,7 @@ export function compositeFrame(
         if (brightness > brightMap[idx]) {
           brightMap[idx] = brightness;
           if (color) colorIndices[idx] = getColorIdx(color);
-          radiusVals[idx] = cell.glowRadius ?? 0;
+          radiusVals[idx] = cell.glowRadius ?? -1;
           asciiCodes[idx] = baseCh.charCodeAt(0);
         }
       } else {
@@ -143,7 +157,7 @@ export function compositeFrame(
           brightMap[idx] = brightness;
           charMap[idx] = getCharIdx(char);
           if (color) colorIndices[idx] = getColorIdx(color);
-          radiusVals[idx] = cell.glowRadius ?? 0;
+          radiusVals[idx] = cell.glowRadius ?? -1;
         }
       }
     }
@@ -167,8 +181,8 @@ export function compositeFrame(
   const text = _textBuf.join("");
   _textBuf.length = savedLen;
 
-  // Collect cells with color for glow rendering
-  const glowCells: GlowCell[] = [];
+  // Collect cells with color for glow rendering (pooled)
+  _glowCount = 0;
   for (let i = 0; i < cols * rows; i++) {
     const ci = colorIndices[i];
     if (ci >= 0) {
@@ -176,17 +190,21 @@ export function compositeFrame(
         ? String.fromCharCode(asciiCodes[i])
         : (charMap[i] !== 0 ? chars[charMap[i]] : undefined);
       if (glowChar) {
-        glowCells.push({
-          row: Math.floor(i / cols),
-          col: i % cols,
-          char: glowChar,
-          color: colorTable[ci],
-          brightness: brightMap[i],
-          glowRadius: radiusVals[i] > 0 ? radiusVals[i] : undefined,
-        });
+        let gc = _glowPool[_glowCount];
+        if (!gc) {
+          gc = { row: 0, col: 0, char: "", color: "", brightness: 0 };
+          _glowPool[_glowCount] = gc;
+        }
+        gc.row = Math.floor(i / cols);
+        gc.col = i % cols;
+        gc.char = glowChar;
+        gc.color = colorTable[ci];
+        gc.brightness = brightMap[i];
+        gc.glowRadius = radiusVals[i] >= 0 ? radiusVals[i] : undefined;
+        _glowCount++;
       }
     }
   }
 
-  return { text, glowCells };
+  return { text, glowCells: _glowPool, glowCount: _glowCount };
 }

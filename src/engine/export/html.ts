@@ -138,15 +138,18 @@ matrix:function(p){
   };
 },
 meteor:function(p){
-  var meteors=[],rate=p.spawnRate||0.3,sn=p.speedMin||15,sx=p.speedMax||30,tl=p.tailLength||8,acc=0;
+  var ms=[],imin=p.intervalMin||3,imax=p.intervalMax||7,sn=p.speedMin||22,sx=p.speedMax||36,tl=p.trailLength||25,next=1,acc=0;
+  var ang=(p.angle||-75)*Math.PI/180,dc=Math.cos(ang),dr=Math.sin(-ang);
   return function(dt,t,out){
-    acc+=rate*dt;if(acc>=1){acc-=1;
-    meteors.push({c:~~(Math.random()*C),r:0,sp:sn+Math.random()*(sx-sn),tl:tl+~~(Math.random()*4)});}
-    for(var i=meteors.length-1;i>=0;i--){var m=meteors[i];var ang=(p.angle||-75)*Math.PI/180;m.r-=Math.sin(ang)*m.sp*dt;m.c+=Math.cos(ang)*m.sp*dt;
-    if(m.r-m.tl>R){meteors.splice(i,1);continue}
-    var hr=~~m.r,hc=~~m.c;
-    for(var j=0;j<m.tl;j++){var r=hr-j,c=hc+~~(j*.3);if(r>=0&&r<R&&c>=0&&c<C){
-    var b=1-j/m.tl;out.push({r:r,c:c,ch:j===0?"@":j<3?"#":j<5?"*":".",b:b});}}}
+    if(t>next){ms.push({c:Math.random()*C*1.1-C*.05,r:-2,age:0,mx:2+Math.random()*1.2,sp:sn+Math.random()*(sx-sn),trail:[]});next=t+imin+Math.random()*(imax-imin);}
+    for(var i=ms.length-1;i>=0;i--){var m=ms[i];m.age+=dt;m.c+=dc*m.sp*dt;m.r+=dr*m.sp*dt;
+    m.trail.push({c:Math.round(m.c),r:Math.round(m.r),age:0});
+    while(m.trail.length>tl)m.trail.shift();
+    for(var j=0;j<m.trail.length;j++)m.trail[j].age+=dt;
+    var off=m.r>R+2||m.c>C+2||m.c<-2;
+    if((m.age>m.mx||off)&&m.trail.every(function(p){return p.age>.7})){ms.splice(i,1);continue}
+    for(var j=0;j<m.trail.length;j++){var p2=m.trail[j];if(p2.age>.7)continue;var ch=p2.age<.12?"*":p2.age<.35?"+":".";out.push({r:p2.r,c:p2.c,ch:ch,b:1-p2.age/.7});}
+    if(m.age<m.mx&&!off)out.push({r:Math.round(m.r),c:Math.round(m.c),ch:"@",b:1});}
   };
 },
 firework:function(p){
@@ -172,7 +175,7 @@ firework:function(p){
   };
 },
 glitch:function(p){
-  var blocks=[],int=p.intensity||.3,bs=p.blockSize||6,acc=0;
+  var blocks=[],int=p.frequency||.3,bs=p.blockSize||6,acc=0;
   var gc="!@#$%&*<>[]{}|/\\\\~";
   return function(dt,t,out){
     acc+=int*dt*3;if(acc>=1){acc-=1;var w=2+~~(Math.random()*bs),h=1+~~(Math.random()*(bs/2));
@@ -183,7 +186,7 @@ glitch:function(p){
   };
 },
 scanline:function(p){
-  var sp=p.speed||8,w=p.width||3,br=p.brightness||1,cnt=p.count||2,chs=p.chars||"=-~";
+  var sp=p.speed||8,w=p.width||2,br=p.brightness||1,cnt=p.count||1,chs=p.chars||"=-~";
   return function(dt,t,out){
     for(var s=0;s<cnt;s++){var phase=(s/cnt)*R;var head=((t*sp+phase)%(R+w))-w;
     for(var wi=0;wi<w;wi++){var r=~~(head+wi);if(r<0||r>=R)continue;
@@ -203,19 +206,18 @@ typewriter:function(p){
   };
 },
 decode:function(p){
-  var bt=null,sp=p.duration||2.4,ramp="@#W$9876543210?!abc;:+=-,._ ";
+  var bt=null,sp=p.duration||2.4,ramp="@#W$9876543210?!abc;:+=-,._ ",delays=null;
   return function(dt,t,out){
-    if(!bt)bt=baseText.split("\\n");
-    for(var r=0;r<Math.min(bt.length,R);r++){var ln=bt[r]||"";
-    for(var c=0;c<ln.length;c++){if(ln[c]===" ")continue;
-    var delay=((c/C+r/R)/2*(p.diagonalBias||0.7)+(1-(p.diagonalBias||0.7))*Math.random())*sp*2;var el=t-delay;
+    if(!bt){bt=baseText.split("\\n");delays=[];for(var r=0;r<Math.min(bt.length,R);r++){var row=[];for(var c=0;c<C;c++){var bias=p.diagonalBias||0.7;row.push((c/C+r/R)/2*bias+(1-bias)*Math.random());}delays.push(row);}}
+    for(var r=0;r<Math.min(bt.length,R);r++){var ln=bt[r]||"";for(var c=0;c<ln.length;c++){if(ln[c]===" ")continue;
+    var delay=delays[r][c]*sp*2;var el=t-delay;
     if(el<0){if(Math.random()<.15)out.push({r:r,c:c,ch:ramp[~~(Math.random()*(ramp.length-1))],b:.3});}
     else if(el<(p.settleTime||0.4)){out.push({r:r,c:c,ch:Math.random()<.5?ln[c]:ramp[~~(Math.random()*(ramp.length-1))],b:.7});}
     else{out.push({r:r,c:c,ch:ln[c],b:1});}}}
   };
 },
 "custom-emitter":function(p){
-  var parts=[],rate=p.rate||10,sp=p.speed||8,life=p.life||2,sprd=p.spread||6.28,acc=0;
+  var parts=[],rate=p.spawnRate||10,sp=p.speed||8,life=p.lifetime||2,sprd=(p.spread||30)*Math.PI/180,acc=0;
   var ch=p.chars||"*+.";
   return function(dt,t,out){
     acc+=rate*dt;var n=~~acc;acc-=n;
