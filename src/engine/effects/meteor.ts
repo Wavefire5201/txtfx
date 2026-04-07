@@ -30,6 +30,8 @@ export class MeteorEffect implements AsciiEffect {
   private speedMax = 36;
   private trailLength = 25;
   private color = "#ffaa33";
+  private glowRadius = 14;
+  private _cells: EffectCell[] = [];
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
     this.grid = grid;
@@ -40,6 +42,7 @@ export class MeteorEffect implements AsciiEffect {
     this.speedMax = (params.speedMax as number) ?? 36;
     this.trailLength = (params.trailLength as number) ?? 25;
     this.color = (params.color as string) ?? "#ffaa33";
+    this.glowRadius = (params.glowRadius as number) ?? 14;
 
     this.dc = Math.cos((this.angle * Math.PI) / 180);
     this.dr = Math.sin((-this.angle * Math.PI) / 180);
@@ -49,7 +52,7 @@ export class MeteorEffect implements AsciiEffect {
 
   update(dt: number, time: number, _mask: MaskGrid): EffectCell[] {
     const { cols, rows } = this.grid;
-    const cells: EffectCell[] = [];
+    const cells = this._cells; cells.length = 0;
 
     if (time > this.nextSpawn) {
       this.meteors.push({
@@ -70,12 +73,17 @@ export class MeteorEffect implements AsciiEffect {
       m.r += this.dr * m.speed * dt;
 
       m.trail.push({ c: Math.round(m.c), r: Math.round(m.r), age: 0 });
-      if (m.trail.length > this.trailLength) m.trail.shift();
+      // Use swap-pop instead of shift() to avoid O(n) copy
+      while (m.trail.length > this.trailLength) {
+        m.trail[0] = m.trail[m.trail.length - 1];
+        m.trail.pop();
+      }
       for (const p of m.trail) p.age += dt;
 
       const offscreen = m.r > rows + 2 || m.c > cols + 2 || m.c < -2;
       if ((m.age > m.maxAge || offscreen) && m.trail.every((p) => p.age > 0.7)) {
-        this.meteors.splice(i, 1);
+        this.meteors[i] = this.meteors[this.meteors.length - 1];
+        this.meteors.pop();
         continue;
       }
 
@@ -83,10 +91,10 @@ export class MeteorEffect implements AsciiEffect {
         if (p.age > 0.7) continue;
         const ch = p.age < 0.12 ? "*" : p.age < 0.35 ? "+" : ".";
         const brightness = 1 - p.age / 0.7;
-        cells.push({ row: p.r, col: p.c, char: ch, brightness, color: this.color });
+        cells.push({ row: p.r, col: p.c, char: ch, brightness, color: this.color, glowRadius: this.glowRadius });
       }
       if (m.age < m.maxAge && !offscreen) {
-        cells.push({ row: Math.round(m.r), col: Math.round(m.c), char: "@", brightness: 1, color: this.color });
+        cells.push({ row: Math.round(m.r), col: Math.round(m.c), char: "@", brightness: 1, color: this.color, glowRadius: this.glowRadius });
       }
     }
 
@@ -100,6 +108,7 @@ export class MeteorEffect implements AsciiEffect {
       { key: "intervalMax", label: "Max interval (s)", type: "slider", min: 1, max: 20, step: 0.5, defaultValue: 7 },
       { key: "trailLength", label: "Trail length", type: "slider", min: 5, max: 50, step: 1, defaultValue: 25 },
       { key: "color", label: "Color", type: "color", defaultValue: "#ffaa33" },
+      { key: "glowRadius", label: "Glow radius", type: "slider", min: 0, max: 40, step: 1, defaultValue: 14 },
     ];
   }
 }

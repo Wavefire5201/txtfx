@@ -19,6 +19,8 @@ export class FireEffect implements AsciiEffect {
   private spread = 1.5;
   private spawnAccum = 0;
   private color = "#ff6622";
+  private glowRadius = 16;
+  private _cells: EffectCell[] = [];
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
     this.grid = grid;
@@ -26,13 +28,14 @@ export class FireEffect implements AsciiEffect {
     this.height = (params.height as number) ?? 0.3;
     this.spread = (params.spread as number) ?? 1.5;
     this.color = (params.color as string) ?? "#ff6622";
+    this.glowRadius = (params.glowRadius as number) ?? 16;
     this.embers = [];
     this.spawnAccum = 0;
   }
 
   update(dt: number, _time: number, _mask: MaskGrid): EffectCell[] {
     const { cols, rows } = this.grid;
-    const cells: EffectCell[] = [];
+    const cells = this._cells; cells.length = 0;
     const baseRow = rows - 1;
 
     // Spawn embers with fractional accumulation
@@ -56,7 +59,8 @@ export class FireEffect implements AsciiEffect {
       e.col += (Math.random() - 0.5) * this.spread * dt * 5;
 
       if (e.life > e.maxLife) {
-        this.embers.splice(i, 1);
+        this.embers[i] = this.embers[this.embers.length - 1];
+        this.embers.pop();
         continue;
       }
 
@@ -68,7 +72,7 @@ export class FireEffect implements AsciiEffect {
       const r = Math.round(e.y);
       const c = Math.round(e.col);
       if (r >= 0 && r < rows && c >= 0 && c < cols) {
-        cells.push({ row: r, col: c, char: ch, brightness: 1 - t, color: this.color });
+        cells.push({ row: r, col: c, char: ch, brightness: 1 - t, color: this.color, glowRadius: this.glowRadius });
       }
     }
 
@@ -81,6 +85,7 @@ export class FireEffect implements AsciiEffect {
       { key: "height", label: "Height", type: "slider", min: 0.1, max: 1, step: 0.05, defaultValue: 0.3 },
       { key: "spread", label: "Spread", type: "slider", min: 0, max: 5, step: 0.5, defaultValue: 1.5 },
       { key: "color", label: "Color", type: "color", defaultValue: "#ff6622" },
+      { key: "glowRadius", label: "Glow radius", type: "slider", min: 0, max: 40, step: 1, defaultValue: 16 },
     ];
   }
 }

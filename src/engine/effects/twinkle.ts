@@ -18,6 +18,7 @@ export class TwinkleEffect implements AsciiEffect {
   private bigChance = 0.35;
   private color = "#ffffff";
   private glowRadius = 18;
+  private _cells: EffectCell[] = [];
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
     this.grid = grid;
@@ -38,7 +39,7 @@ export class TwinkleEffect implements AsciiEffect {
   }
 
   update(_dt: number, time: number, _mask: MaskGrid): EffectCell[] {
-    const cells: EffectCell[] = [];
+    const cells = this._cells; cells.length = 0;
     for (const s of this.stars) {
       const pulse = 0.5 + 0.5 * Math.sin(time * s.speed + s.phase);
       if (pulse < 0.25) continue;

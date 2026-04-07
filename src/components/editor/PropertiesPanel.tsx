@@ -18,7 +18,7 @@ import {
   Lightning,
   ShootingStar,
   CloudRain,
-  Waves,
+  Monitor,
   Keyboard,
   Terminal,
   Fire,
@@ -27,7 +27,7 @@ import {
 
 const ALL_EFFECT_TYPES: EffectType[] = [
   "twinkle", "meteor", "rain", "snow", "fire", "matrix",
-  "waves", "glitch", "typewriter", "decode", "firework", "custom-emitter",
+  "scanline", "glitch", "typewriter", "decode", "firework", "custom-emitter",
 ];
 
 const EFFECT_ICONS: Record<EffectType, React.ReactNode> = {
@@ -37,7 +37,7 @@ const EFFECT_ICONS: Record<EffectType, React.ReactNode> = {
   snow: <Snowflake size={14} />,
   fire: <Flame size={14} />,
   matrix: <Terminal size={14} />,
-  waves: <Waves size={14} />,
+  scanline: <Monitor size={14} />,
   glitch: <Lightning size={14} />,
   typewriter: <Keyboard size={14} />,
   decode: <Terminal size={14} />,

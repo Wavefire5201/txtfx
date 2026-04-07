@@ -47,7 +47,7 @@ export type EffectType =
   | "snow"
   | "fire"
   | "matrix"
-  | "waves"
+  | "scanline"
   | "glitch"
   | "typewriter"
   | "decode"

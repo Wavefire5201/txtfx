@@ -15,6 +15,7 @@ export class DecodeEffect implements AsciiEffect {
   private settleTime = 0.4;
   private diagonalBias = 0.7;
   private color = "#00ff41";
+  private _cells: EffectCell[] = [];
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
     this.grid = grid;
@@ -50,7 +51,7 @@ export class DecodeEffect implements AsciiEffect {
     // Effect is done after duration + settleTime
     if (time > this.duration + this.settleTime + 0.5) return [];
 
-    const cells: EffectCell[] = [];
+    const cells = this._cells; cells.length = 0;
 
     for (let r = 0; r < rows && r < this.baseChars.length; r++) {
       const row = this.baseChars[r];

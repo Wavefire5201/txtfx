@@ -5,7 +5,7 @@ import { RainEffect } from "./rain";
 import { SnowEffect } from "./snow";
 import { FireEffect } from "./fire";
 import { MatrixEffect } from "./matrix";
-import { WavesEffect } from "./waves";
+import { ScanlineEffect } from "./scanline";
 import { GlitchEffect } from "./glitch";
 import { TypewriterEffect } from "./typewriter";
 import { DecodeEffect } from "./decode";
@@ -19,7 +19,7 @@ const EFFECT_CONSTRUCTORS: Record<EffectType, new () => AsciiEffect> = {
   snow: SnowEffect,
   fire: FireEffect,
   matrix: MatrixEffect,
-  waves: WavesEffect,
+  scanline: ScanlineEffect,
   glitch: GlitchEffect,
   typewriter: TypewriterEffect,
   decode: DecodeEffect,
@@ -27,8 +27,10 @@ const EFFECT_CONSTRUCTORS: Record<EffectType, new () => AsciiEffect> = {
   "custom-emitter": CustomEmitterEffect,
 };
 
-export function createEffect(type: EffectType): AsciiEffect {
-  const Ctor = EFFECT_CONSTRUCTORS[type];
+export function createEffect(type: EffectType | string): AsciiEffect {
+  // Migration: "waves" was replaced by "scanline"
+  const resolved = type === "waves" ? "scanline" : type;
+  const Ctor = EFFECT_CONSTRUCTORS[resolved as EffectType];
   if (!Ctor) throw new Error(`Unknown effect type: ${type}`);
   return new Ctor();
 }
@@ -40,7 +42,7 @@ export const EFFECT_LABELS: Record<EffectType, { label: string; icon: string }> 
   snow: { label: "Snow", icon: "\u2744\uFE0F" },
   fire: { label: "Fire", icon: "\uD83D\uDD25" },
   matrix: { label: "Matrix Rain", icon: "\uD83D\uDFE2" },
-  waves: { label: "Waves", icon: "\uD83C\uDF0A" },
+  scanline: { label: "Scanline", icon: "\uD83D\uDCFA" },
   glitch: { label: "Glitch", icon: "\u26A1" },
   typewriter: { label: "Typewriter", icon: "\u2328\uFE0F" },
   decode: { label: "Decode", icon: "\uD83D\uDD13" },

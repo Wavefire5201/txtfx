@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import { useEditorStore } from "@/lib/store";
 import { exportStandaloneHTML } from "@/engine/export/html";
 import { exportEmbedSnippet } from "@/engine/export/embed";
+import type { SceneData } from "@/engine/scene";
 import { toast } from "./Toast";
 import {
   FolderOpen,
@@ -28,7 +29,18 @@ export function Toolbar() {
   const fileRef = useRef<HTMLInputElement>(null);
   const setImageUrl = useEditorStore((s) => s.setImageUrl);
   const scene = useEditorStore((s) => s.scene);
+  const imageUrl = useEditorStore((s) => s.imageUrl);
   const [exportOpen, setExportOpen] = useState(false);
+
+  function getExportScene(): SceneData {
+    return {
+      ...scene,
+      image: {
+        ...scene.image,
+        data: imageUrl || "",
+      },
+    };
+  }
 
   function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -40,14 +52,14 @@ export function Toolbar() {
   }
 
   function handleExportJSON() {
-    const blob = new Blob([JSON.stringify(scene, null, 2)], { type: "application/json" });
+    const blob = new Blob([JSON.stringify(getExportScene(), null, 2)], { type: "application/json" });
     downloadBlob(blob, "scene.txtfx");
     setExportOpen(false);
     toast("Scene exported as JSON");
   }
 
   function handleExportHTML() {
-    const html = exportStandaloneHTML(scene);
+    const html = exportStandaloneHTML(getExportScene());
     const blob = new Blob([html], { type: "text/html" });
     downloadBlob(blob, "scene.html");
     setExportOpen(false);
@@ -55,7 +67,7 @@ export function Toolbar() {
   }
 
   function handleExportEmbed() {
-    const snippet = exportEmbedSnippet(scene);
+    const snippet = exportEmbedSnippet(getExportScene());
     navigator.clipboard.writeText(snippet).then(() => {
       toast("Embed snippet copied to clipboard");
     }).catch(() => {
@@ -65,7 +77,7 @@ export function Toolbar() {
   }
 
   function handleShare() {
-    const json = JSON.stringify(scene);
+    const json = JSON.stringify(getExportScene());
     const blob = new Blob([json], { type: "application/json" });
     downloadBlob(blob, "scene.txtfx");
     toast("Scene file downloaded for sharing");

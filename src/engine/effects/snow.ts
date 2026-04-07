@@ -21,6 +21,8 @@ export class SnowEffect implements AsciiEffect {
   private driftAmount = 2;
   private spawnAccum = 0;
   private color = "#ffffff";
+  private glowRadius = 12;
+  private _cells: EffectCell[] = [];
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
     this.grid = grid;
@@ -29,13 +31,14 @@ export class SnowEffect implements AsciiEffect {
     this.speedMax = (params.speedMax as number) ?? 8;
     this.driftAmount = (params.driftAmount as number) ?? 2;
     this.color = (params.color as string) ?? "#ffffff";
+    this.glowRadius = (params.glowRadius as number) ?? 12;
     this.flakes = [];
     this.spawnAccum = 0;
   }
 
   update(dt: number, time: number, _mask: MaskGrid): EffectCell[] {
     const { cols, rows } = this.grid;
-    const cells: EffectCell[] = [];
+    const cells = this._cells; cells.length = 0;
 
     this.spawnAccum += cols * this.density * dt;
     const spawnCount = Math.floor(this.spawnAccum);
@@ -57,14 +60,15 @@ export class SnowEffect implements AsciiEffect {
       f.col += Math.sin(time * 1.5 + f.phase) * f.drift * dt;
 
       if (f.y > rows) {
-        this.flakes.splice(i, 1);
+        this.flakes[i] = this.flakes[this.flakes.length - 1];
+        this.flakes.pop();
         continue;
       }
 
       const r = Math.floor(f.y);
       const c = Math.round(f.col);
       if (r >= 0 && r < rows && c >= 0 && c < cols) {
-        cells.push({ row: r, col: c, char: f.char, brightness: 0.7, color: this.color });
+        cells.push({ row: r, col: c, char: f.char, brightness: 0.7, color: this.color, glowRadius: this.glowRadius });
       }
     }
 
@@ -78,6 +82,7 @@ export class SnowEffect implements AsciiEffect {
       { key: "speedMax", label: "Max speed", type: "slider", min: 3, max: 20, step: 0.5, defaultValue: 8 },
       { key: "driftAmount", label: "Drift", type: "slider", min: 0, max: 5, step: 0.5, defaultValue: 2 },
       { key: "color", label: "Color", type: "color", defaultValue: "#ffffff" },
+      { key: "glowRadius", label: "Glow radius", type: "slider", min: 0, max: 40, step: 1, defaultValue: 12 },
     ];
   }
 }

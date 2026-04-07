@@ -26,6 +26,8 @@ export class FireworkEffect implements AsciiEffect {
   private particleCount = 50;
   private maxRadius = 20;
   private color = "#ffcc00";
+  private glowRadius = 18;
+  private _cells: EffectCell[] = [];
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
     this.grid = grid;
@@ -34,13 +36,14 @@ export class FireworkEffect implements AsciiEffect {
     this.particleCount = (params.particleCount as number) ?? 50;
     this.maxRadius = (params.maxRadius as number) ?? 20;
     this.color = (params.color as string) ?? "#ffcc00";
+    this.glowRadius = (params.glowRadius as number) ?? 18;
     this.bursts = [];
     this.nextSpawn = this.intervalMin + Math.random() * (this.intervalMax - this.intervalMin);
   }
 
   update(dt: number, time: number, _mask: MaskGrid): EffectCell[] {
     const { cols, rows } = this.grid;
-    const cells: EffectCell[] = [];
+    const cells = this._cells; cells.length = 0;
 
     if (time > this.nextSpawn) {
       this.spawnBurst(cols, rows);
@@ -67,11 +70,14 @@ export class FireworkEffect implements AsciiEffect {
         const c = Math.round(p.c);
         if (r >= 0 && r < rows && c >= 0 && c < cols) {
           const ch = t < 0.3 ? p.char : t < 0.6 ? "+" : ".";
-          cells.push({ row: r, col: c, char: ch, brightness, color: this.color });
+          cells.push({ row: r, col: c, char: ch, brightness, color: this.color, glowRadius: this.glowRadius });
         }
       }
 
-      if (!alive) this.bursts.splice(i, 1);
+      if (!alive) {
+        this.bursts[i] = this.bursts[this.bursts.length - 1];
+        this.bursts.pop();
+      }
     }
 
     return cells;
@@ -139,6 +145,7 @@ export class FireworkEffect implements AsciiEffect {
       { key: "particleCount", label: "Particles", type: "slider", min: 20, max: 100, step: 5, defaultValue: 50 },
       { key: "maxRadius", label: "Radius", type: "slider", min: 8, max: 40, step: 2, defaultValue: 20 },
       { key: "color", label: "Color", type: "color", defaultValue: "#ffcc00" },
+      { key: "glowRadius", label: "Glow radius", type: "slider", min: 0, max: 40, step: 1, defaultValue: 18 },
     ];
   }
 }

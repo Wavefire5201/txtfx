@@ -17,6 +17,8 @@ export class RainEffect implements AsciiEffect {
   private wind = 0;
   private spawnAccum = 0;
   private color = "#88bbee";
+  private glowRadius = 10;
+  private _cells: EffectCell[] = [];
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
     this.grid = grid;
@@ -25,13 +27,14 @@ export class RainEffect implements AsciiEffect {
     this.speedMax = (params.speedMax as number) ?? 35;
     this.wind = (params.wind as number) ?? 0;
     this.color = (params.color as string) ?? "#88bbee";
+    this.glowRadius = (params.glowRadius as number) ?? 10;
     this.drops = [];
     this.spawnAccum = 0;
   }
 
   update(dt: number, _time: number, _mask: MaskGrid): EffectCell[] {
     const { cols, rows } = this.grid;
-    const cells: EffectCell[] = [];
+    const cells = this._cells; cells.length = 0;
 
     // Spawn new drops with fractional accumulation
     this.spawnAccum += cols * this.density * dt;
@@ -53,7 +56,8 @@ export class RainEffect implements AsciiEffect {
       d.col += this.wind * dt;
 
       if (d.y - d.length > rows) {
-        this.drops.splice(i, 1);
+        this.drops[i] = this.drops[this.drops.length - 1];
+        this.drops.pop();
         continue;
       }
 
@@ -63,7 +67,7 @@ export class RainEffect implements AsciiEffect {
         const r = headRow - j;
         if (r < 0 || r >= rows || col < 0 || col >= cols) continue;
         const ch = j === 0 ? "|" : j === 1 ? ":" : ".";
-        cells.push({ row: r, col, char: ch, brightness: 1 - j / d.length, color: this.color });
+        cells.push({ row: r, col, char: ch, brightness: 1 - j / d.length, color: this.color, glowRadius: this.glowRadius });
       }
     }
 
@@ -77,6 +81,7 @@ export class RainEffect implements AsciiEffect {
       { key: "speedMax", label: "Max speed", type: "slider", min: 10, max: 60, step: 1, defaultValue: 35 },
       { key: "wind", label: "Wind", type: "slider", min: -10, max: 10, step: 0.5, defaultValue: 0 },
       { key: "color", label: "Color", type: "color", defaultValue: "#88bbee" },
+      { key: "glowRadius", label: "Glow radius", type: "slider", min: 0, max: 40, step: 1, defaultValue: 10 },
     ];
   }
 }

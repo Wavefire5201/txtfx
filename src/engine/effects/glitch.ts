@@ -20,6 +20,7 @@ export class GlitchEffect implements AsciiEffect {
   private blockSize = 8;
   private intensity = 0.6;
   private color = "#ff3366";
+  private _cells: EffectCell[] = [];
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
     this.grid = grid;
@@ -33,7 +34,7 @@ export class GlitchEffect implements AsciiEffect {
 
   update(dt: number, time: number, _mask: MaskGrid): EffectCell[] {
     const { cols, rows } = this.grid;
-    const cells: EffectCell[] = [];
+    const cells = this._cells; cells.length = 0;
 
     if (time > this.nextSpawn) {
       const w = 2 + Math.floor(Math.random() * this.blockSize);
@@ -53,7 +54,8 @@ export class GlitchEffect implements AsciiEffect {
       const b = this.blocks[i];
       b.life += dt;
       if (b.life > b.maxLife) {
-        this.blocks.splice(i, 1);
+        this.blocks[i] = this.blocks[this.blocks.length - 1];
+        this.blocks.pop();
         continue;
       }
 

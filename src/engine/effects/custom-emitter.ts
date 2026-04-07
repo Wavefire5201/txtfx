@@ -26,6 +26,8 @@ export class CustomEmitterEffect implements AsciiEffect {
   private spawnY = 1.0;
   private spawnAccum = 0;
   private color = "#ffffff";
+  private glowRadius = 14;
+  private _cells: EffectCell[] = [];
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
     this.grid = grid;
@@ -39,13 +41,14 @@ export class CustomEmitterEffect implements AsciiEffect {
     this.spawnX = (params.spawnX as number) ?? 0.5;
     this.spawnY = (params.spawnY as number) ?? 1.0;
     this.color = (params.color as string) ?? "#ffffff";
+    this.glowRadius = (params.glowRadius as number) ?? 14;
     this.particles = [];
     this.spawnAccum = 0;
   }
 
   update(dt: number, _time: number, _mask: MaskGrid): EffectCell[] {
     const { cols, rows } = this.grid;
-    const cells: EffectCell[] = [];
+    const cells = this._cells; cells.length = 0;
 
     // Spawn with fractional accumulation
     this.spawnAccum += this.spawnRate * dt;
@@ -69,7 +72,8 @@ export class CustomEmitterEffect implements AsciiEffect {
       const p = this.particles[i];
       p.life += dt;
       if (p.life > p.maxLife) {
-        this.particles.splice(i, 1);
+        this.particles[i] = this.particles[this.particles.length - 1];
+        this.particles.pop();
         continue;
       }
 
@@ -88,6 +92,7 @@ export class CustomEmitterEffect implements AsciiEffect {
           char: this.chars[charProgress],
           brightness: 1 - t,
           color: this.color,
+          glowRadius: this.glowRadius,
         });
       }
     }
@@ -107,6 +112,7 @@ export class CustomEmitterEffect implements AsciiEffect {
       { key: "spawnX", label: "Spawn X", type: "slider", min: 0, max: 1, step: 0.05, defaultValue: 0.5 },
       { key: "spawnY", label: "Spawn Y", type: "slider", min: 0, max: 1, step: 0.05, defaultValue: 1 },
       { key: "color", label: "Color", type: "color", defaultValue: "#ffffff" },
+      { key: "glowRadius", label: "Glow radius", type: "slider", min: 0, max: 40, step: 1, defaultValue: 14 },
     ];
   }
 }

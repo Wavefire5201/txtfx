@@ -24,6 +24,8 @@ export class MatrixEffect implements AsciiEffect {
   private speedMin = 5;
   private speedMax = 14;
   private color = "#00ff41";
+  private glowRadius = 10;
+  private _cells: EffectCell[] = [];
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
     this.grid = grid;
@@ -31,6 +33,7 @@ export class MatrixEffect implements AsciiEffect {
     this.speedMin = (params.speedMin as number) ?? 5;
     this.speedMax = (params.speedMax as number) ?? 14;
     this.color = (params.color as string) ?? "#00ff41";
+    this.glowRadius = (params.glowRadius as number) ?? 10;
 
     // Create one column entry per grid column, but only some are active
     const { cols, rows } = grid;
@@ -55,7 +58,7 @@ export class MatrixEffect implements AsciiEffect {
 
   update(dt: number, _time: number, _mask: MaskGrid): EffectCell[] {
     const { cols, rows } = this.grid;
-    const cells: EffectCell[] = [];
+    const cells = this._cells; cells.length = 0;
 
     for (const col of this.columns) {
       // Waiting to respawn
@@ -102,7 +105,7 @@ export class MatrixEffect implements AsciiEffect {
           brightness = Math.max(0.1, 0.5 * (1 - t));
         }
 
-        cells.push({ row: r, col: c, char: col.chars[r], brightness, color: this.color });
+        cells.push({ row: r, col: c, char: col.chars[r], brightness, color: this.color, glowRadius: this.glowRadius });
       }
     }
 
@@ -115,6 +118,7 @@ export class MatrixEffect implements AsciiEffect {
       { key: "speedMin", label: "Min speed", type: "slider", min: 2, max: 10, step: 1, defaultValue: 5 },
       { key: "speedMax", label: "Max speed", type: "slider", min: 5, max: 25, step: 1, defaultValue: 14 },
       { key: "color", label: "Color", type: "color", defaultValue: "#00ff41" },
+      { key: "glowRadius", label: "Glow radius", type: "slider", min: 0, max: 40, step: 1, defaultValue: 10 },
     ];
   }
 }

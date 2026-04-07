@@ -7,7 +7,6 @@ import { createEffect } from "@/engine/effects";
 import { compositeFrame, type ActiveEffect, type GlowCell } from "@/engine/renderer";
 import type { GridInfo, MaskGrid } from "@/engine/effects/types";
 import { ImageSquare, UploadSimple } from "@phosphor-icons/react";
-import type { WavesEffect } from "@/engine/effects/waves";
 import type { TypewriterEffect } from "@/engine/effects/typewriter";
 import type { DecodeEffect } from "@/engine/effects/decode";
 
@@ -52,9 +51,17 @@ export function Canvas() {
   const lastTimeRef = useRef(0);
   const lastRenderedTimeRef = useRef(0);
   const lastStoreUpdateRef = useRef(0);
+  const lastFrameTimeRef = useRef(0);
   const isPaintingRef = useRef(false);
   const lastPaintRef = useRef<{ x: number; y: number } | null>(null);
   const maskGridRef = useRef<MaskGrid>(EMPTY_MASK);
+  const glowSpriteRef = useRef<HTMLCanvasElement | null>(null);
+  const glowSpriteSizeRef = useRef(0);
+  const perfRef = useRef<HTMLDivElement>(null);
+  const perfFrames = useRef(0);
+  const perfLastUpdate = useRef(0);
+  const perfCells = useRef(0);
+  const perfGlow = useRef(0);
 
   // Load image
   useEffect(() => {
@@ -86,8 +93,8 @@ export function Canvas() {
   function feedBaseText(effects: ActiveEffect[], text: string) {
     for (const fx of effects) {
       const inst = fx.instance;
-      if ("setBaseText" in inst && typeof (inst as WavesEffect | TypewriterEffect | DecodeEffect).setBaseText === "function") {
-        (inst as WavesEffect | TypewriterEffect | DecodeEffect).setBaseText(text);
+      if ("setBaseText" in inst && typeof (inst as TypewriterEffect | DecodeEffect).setBaseText === "function") {
+        (inst as TypewriterEffect | DecodeEffect).setBaseText(text);
       }
     }
   }
@@ -219,6 +226,27 @@ export function Canvas() {
     }
   }
 
+  function getGlowSprite(radius: number): HTMLCanvasElement {
+    const size = Math.ceil(radius * 2 + 4);
+    if (glowSpriteRef.current && glowSpriteSizeRef.current === size) {
+      return glowSpriteRef.current;
+    }
+    const c = document.createElement("canvas");
+    c.width = size;
+    c.height = size;
+    const sctx = c.getContext("2d")!;
+    const cx = size / 2;
+    const grad = sctx.createRadialGradient(cx, cx, 0, cx, cx, radius);
+    grad.addColorStop(0, "rgba(255,255,255,1)");
+    grad.addColorStop(0.4, "rgba(255,255,255,0.4)");
+    grad.addColorStop(1, "rgba(255,255,255,0)");
+    sctx.fillStyle = grad;
+    sctx.fillRect(0, 0, size, size);
+    glowSpriteRef.current = c;
+    glowSpriteSizeRef.current = size;
+    return c;
+  }
+
   function renderGlow(glowCells: GlowCell[]) {
     const canvas = glowCanvasRef.current;
     const container = containerRef.current;
@@ -229,56 +257,75 @@ export function Canvas() {
     const w = rect.width;
     const h = rect.height;
 
-    // Resize canvas (also clears it)
-    canvas.width = w * dpr;
-    canvas.height = h * dpr;
-
-    if (glowCells.length === 0) return;
+    const newW = w * dpr;
+    const newH = h * dpr;
+    const needsResize = canvas.width !== newW || canvas.height !== newH;
+    if (needsResize) {
+      canvas.width = newW;
+      canvas.height = newH;
+    }
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    ctx.scale(dpr, dpr);
 
-    // Match the ASCII pre font
+    if (needsResize) {
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    } else {
+      ctx.clearRect(0, 0, w, h);
+    }
+
+    if (glowCells.length === 0) return;
+
     ctx.font = `${grid.fontSize}px ${scene.ascii.fontFamily}`;
     ctx.textBaseline = "top";
-
-    // Match the pre element's padding: 10px 8px 8px (top right bottom left → top=10, left=8)
     const padLeft = 8;
     const padTop = 10;
+
+    let prevHex = "";
+    let cR = 0, cG = 0, cB = 0;
+    // Pre-build RGBA strings per unique color (most effects use 1 color)
+    let glowCenter = "";
+    let glowMid = "";
+    let glowFill = "";
 
     for (const cell of glowCells) {
       const x = padLeft + cell.col * grid.charW;
       const y = padTop + cell.row * grid.charH;
       const cx = x + grid.charW * 0.5;
       const cy = y + grid.charH * 0.5;
-
-      // Parse hex color to RGB
-      const hex = cell.color;
-      const r = parseInt(hex.slice(1, 3), 16) || 0;
-      const g = parseInt(hex.slice(3, 5), 16) || 0;
-      const b = parseInt(hex.slice(5, 7), 16) || 0;
-
       const a = cell.brightness;
 
-      // 1. Radial gradient glow
-      const glowRadius = cell.glowRadius ?? (4 + 14 * a);
-      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, glowRadius);
-      grad.addColorStop(0, `rgba(${r},${g},${b},${a * 0.7})`);
-      grad.addColorStop(0.4, `rgba(${r},${g},${b},${a * 0.28})`);
-      grad.addColorStop(1, `rgba(${r},${g},${b},0)`);
-      ctx.fillStyle = grad;
-      ctx.fillRect(cx - glowRadius, cy - glowRadius, glowRadius * 2, glowRadius * 2);
+      if (cell.color !== prevHex) {
+        prevHex = cell.color;
+        cR = parseInt(cell.color.slice(1, 3), 16) || 0;
+        cG = parseInt(cell.color.slice(3, 5), 16) || 0;
+        cB = parseInt(cell.color.slice(5, 7), 16) || 0;
+        // Cache color strings — only rebuilt on color change
+        const rgb = `${cR},${cG},${cB}`;
+        glowCenter = `rgba(${rgb},`;
+        glowMid = glowCenter;
+        glowFill = `rgb(${rgb})`;
+        ctx.fillStyle = glowFill;
+        ctx.shadowColor = glowFill;
+      }
 
-      // 2. Colored text with shadow (double-painted for brightness)
-      ctx.save();
-      ctx.shadowColor = `rgba(${r},${g},${b},${Math.min(1, a)})`;
-      ctx.shadowBlur = 12;
-      ctx.fillStyle = `rgba(${r},${g},${b},${Math.min(1, a * 0.95)})`;
+      // Colored radial gradient glow
+      const gr = cell.glowRadius ?? 18;
+      const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, gr);
+      grad.addColorStop(0, glowCenter + (a * 0.7) + ")");
+      grad.addColorStop(0.4, glowMid + (a * 0.28) + ")");
+      grad.addColorStop(1, glowCenter + "0)");
+      ctx.fillStyle = grad;
+      ctx.fillRect(cx - gr, cy - gr, gr * 2, gr * 2);
+
+      // Colored text with shadow
+      ctx.fillStyle = glowFill;
+      ctx.globalAlpha = Math.min(1, a * 0.95);
+      ctx.shadowBlur = 10;
       ctx.fillText(cell.char, x, y);
-      ctx.fillText(cell.char, x, y);
-      ctx.restore();
+      ctx.globalAlpha = 1;
     }
+    ctx.shadowBlur = 0;
   }
 
   // Animation loop
@@ -292,6 +339,7 @@ export function Canvas() {
     const resumeFrom = useEditorStore.getState().currentTime;
     startTimeRef.current = performance.now() - resumeFrom * 1000;
     lastTimeRef.current = resumeFrom;
+    lastFrameTimeRef.current = 0; // ensure first frame renders immediately
 
     const duration = scene.playback.duration;
     const loop = scene.playback.loop;
@@ -314,6 +362,17 @@ export function Canvas() {
         return;
       }
 
+      // Frame-rate gating: skip render if below target interval
+      // Use wall-clock time (not looped playback time) to avoid wrap issues
+      const wallNow = performance.now() / 1000;
+      const targetInterval = 1 / (scene.playback.fps || 30);
+      if (wallNow - lastFrameTimeRef.current < targetInterval) {
+        animRef.current = requestAnimationFrame(tick);
+        return;
+      }
+      lastFrameTimeRef.current = wallNow;
+
+      // Calculate dt from last rendered time (not last tick) so skipped frames don't lose simulation time
       const dt = Math.min(0.05, Math.abs(now - lastTimeRef.current));
       lastTimeRef.current = now;
       lastRenderedTimeRef.current = now;
@@ -327,7 +386,22 @@ export function Canvas() {
         const currentMask = maskGridRef.current;
         const result = compositeFrame(effectsRef.current, dt, now, currentMask, grid, asciiTextRef.current);
         sparkleRef.current.textContent = result.text;
+        perfCells.current = result.glowCells.length;
         renderGlow(result.glowCells);
+        perfGlow.current = result.glowCells.length;
+      }
+
+      // Update perf overlay (~2x/sec to avoid overhead)
+      perfFrames.current++;
+      const perfNow = performance.now();
+      if (perfNow - perfLastUpdate.current > 500) {
+        const fps = Math.round(perfFrames.current / ((perfNow - perfLastUpdate.current) / 1000));
+        const frameMs = ((perfNow - perfLastUpdate.current) / perfFrames.current).toFixed(1);
+        perfFrames.current = 0;
+        perfLastUpdate.current = perfNow;
+        if (perfRef.current) {
+          perfRef.current.textContent = `${fps} fps · ${frameMs}ms · ${perfCells.current} cells · ${perfGlow.current} glow`;
+        }
       }
 
       animRef.current = requestAnimationFrame(tick);
@@ -600,6 +674,12 @@ export function Canvas() {
           <span className="viewport-info-sep">|</span>
           <span>{grid.cols} x {grid.rows} chars</span>
         </div>
+      )}
+      {playing && (
+        <div
+          ref={perfRef}
+          className="perf-overlay"
+        />
       )}
     </div>
   );
