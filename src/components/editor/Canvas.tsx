@@ -6,8 +6,9 @@ import { Mask } from "@/engine/mask";
 import { measureGrid, imageToAscii, sampleMeanColor } from "@/engine/ascii";
 import { createEffect } from "@/engine/effects";
 import { compositeFrame, type ActiveEffect, type GlowCell } from "@/engine/renderer";
+import { getGlowSprite } from "@/engine/glow-cache";
 import type { GridInfo, MaskGrid } from "@/engine/effects/types";
-import { ImageSquare, UploadSimple } from "@phosphor-icons/react";
+import { ImageSquare, UploadSimple, ChartLine } from "@phosphor-icons/react";
 import { toast } from "./Toast";
 import type { TypewriterEffect } from "@/engine/effects/typewriter";
 import type { DecodeEffect } from "@/engine/effects/decode";
@@ -48,7 +49,9 @@ export function Canvas() {
 
   const [grid, setGrid] = useState<GridInfo>({ cols: 0, rows: 0, charW: 0, charH: 0, fontSize: 0 });
   const [imgSize, setImgSize] = useState({ w: 0, h: 0 });
+  const [displayRect, setDisplayRect] = useState({ x: 0, y: 0, w: 0, h: 0 });
   const [draggingOver, setDraggingOver] = useState(false);
+  const [showPerf, setShowPerf] = useState(true);
 
   const imgRef = useRef<HTMLImageElement | null>(null);
   const effectsRef = useRef<ActiveEffect[]>([]);
@@ -149,6 +152,7 @@ export function Canvas() {
         bgRef.current.style.backgroundColor = `rgb(${(r * 0.5) | 0}, ${(g * 0.5) | 0}, ${(b * 0.5) | 0})`;
       }
 
+      computeContainRect();
       regenerate();
     };
     img.src = imageUrl;
@@ -184,7 +188,7 @@ export function Canvas() {
           enabled: cfg.enabled,
           timelineStart: cfg.timeline.start,
           timelineEnd: cfg.timeline.end,
-          loop: cfg.timeline.loop,
+          mode: cfg.timeline.mode ?? "continuous",
           applyToAscii: cfg.applyToAscii ?? false,
         };
       });
@@ -199,7 +203,7 @@ export function Canvas() {
           enabled: cfg.enabled,
           timelineStart: cfg.timeline.start,
           timelineEnd: cfg.timeline.end,
-          loop: cfg.timeline.loop,
+          mode: cfg.timeline.mode ?? "continuous",
           applyToAscii: cfg.applyToAscii ?? false,
         };
       });
@@ -208,6 +212,30 @@ export function Canvas() {
       feedBaseText(effectsRef.current, asciiTextRef.current);
     }
   }, [scene.effects, grid]);
+
+  const computeContainRect = useCallback(() => {
+    const container = containerRef.current;
+    if (!container || !imgRef.current) return;
+    const vp = container.getBoundingClientRect();
+    const imgW = imgRef.current.naturalWidth;
+    const imgH = imgRef.current.naturalHeight;
+    if (imgW === 0 || imgH === 0 || vp.width === 0 || vp.height === 0) return;
+    const imgAspect = imgW / imgH;
+    const vpAspect = vp.width / vp.height;
+
+    let w, h;
+    if (imgAspect > vpAspect) {
+      w = vp.width;
+      h = vp.width / imgAspect;
+    } else {
+      h = vp.height;
+      w = vp.height * imgAspect;
+    }
+
+    const x = (vp.width - w) / 2;
+    const y = (vp.height - h) / 2;
+    setDisplayRect({ x, y, w, h });
+  }, []);
 
   const regenerate = useCallback(() => {
     const img = imgRef.current;
@@ -233,9 +261,17 @@ export function Canvas() {
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    const obs = new ResizeObserver(() => regenerate());
+    const obs = new ResizeObserver(() => {
+      computeContainRect();
+      regenerate();
+    });
     obs.observe(el);
     return () => obs.disconnect();
+  }, [computeContainRect, regenerate]);
+
+  // Re-render when fonts load (prevents mismatched layers)
+  useEffect(() => {
+    document.fonts.ready.then(() => regenerate());
   }, [regenerate]);
 
   // Build mask grid when mask changes
@@ -250,12 +286,10 @@ export function Canvas() {
   useEffect(() => {
     if (!maskOverlayRef.current) return;
     const canvas = maskOverlayRef.current;
-    const container = containerRef.current;
-    if (!container) return;
+    if (displayRect.w === 0 || displayRect.h === 0) return;
 
-    const rect = container.getBoundingClientRect();
-    canvas.width = rect.width;
-    canvas.height = rect.height;
+    canvas.width = displayRect.w;
+    canvas.height = displayRect.h;
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
@@ -291,7 +325,7 @@ export function Canvas() {
       }
     }
     ctx.putImageData(imgData, 0, 0);
-  }, [showMask, maskVersion, imgSize]);
+  }, [showMask, maskVersion, displayRect]);
 
   // Fast-forward effects from time 0 to targetTime by simulating in steps
   function simulateToTime(targetTime: number) {
@@ -317,13 +351,12 @@ export function Canvas() {
 
   function renderGlow(glowCells: GlowCell[], count: number) {
     const canvas = glowCanvasRef.current;
-    const container = containerRef.current;
-    if (!canvas || !container) return;
+    if (!canvas) return;
+    if (displayRect.w === 0 || displayRect.h === 0) return;
 
-    const rect = container.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
-    const w = rect.width;
-    const h = rect.height;
+    const w = displayRect.w;
+    const h = displayRect.h;
 
     const newW = w * dpr;
     const newH = h * dpr;
@@ -343,10 +376,12 @@ export function Canvas() {
 
     if (count === 0) return;
 
-    const fontStr = `${grid.fontSize}px ${scene.ascii.fontFamily}`;
-    if (fontStr !== lastFontRef.current) {
-      ctx.font = fontStr;
-      lastFontRef.current = fontStr;
+    // Use the computed font from the actual pre element (matches Next.js loaded font)
+    const pre = sparkleRef.current || asciiRef.current;
+    const computedFont = pre ? getComputedStyle(pre).font : `${grid.fontSize}px monospace`;
+    if (computedFont !== lastFontRef.current) {
+      ctx.font = computedFont;
+      lastFontRef.current = computedFont;
     }
     ctx.textBaseline = "top";
     const padLeft = 8;
@@ -354,51 +389,48 @@ export function Canvas() {
 
     let prevHex = "";
     let cR = 0, cG = 0, cB = 0;
-    // Pre-build RGBA strings per unique color (most effects use 1 color)
-    let glowCenter = "";
-    let glowMid = "";
     let glowFill = "";
 
-    for (let i = 0; i < count; i++) { const cell = glowCells[i];
-      const x = padLeft + cell.col * grid.charW;
-      const y = padTop + cell.row * grid.charH;
-      const cx = x + grid.charW * 0.5;
-      const cy = y + grid.charH * 0.5;
-      const a = cell.brightness;
+    // Pass 1: Draw all glow sprites (no shadowBlur, no text)
+    for (let i = 0; i < count; i++) {
+      const cell = glowCells[i];
+      const gr = cell.glowRadius ?? 18;
+      if (gr <= 0) continue;
+
+      const cx = padLeft + cell.col * grid.charW + grid.charW * 0.5;
+      const cy = padTop + cell.row * grid.charH + grid.charH * 0.5;
 
       if (cell.color !== prevHex) {
         prevHex = cell.color;
         cR = parseInt(cell.color.slice(1, 3), 16) || 0;
         cG = parseInt(cell.color.slice(3, 5), 16) || 0;
         cB = parseInt(cell.color.slice(5, 7), 16) || 0;
-        // Cache color strings — only rebuilt on color change
-        const rgb = `${cR},${cG},${cB}`;
-        glowCenter = `rgba(${rgb},`;
-        glowMid = glowCenter;
-        glowFill = `rgb(${rgb})`;
-        ctx.fillStyle = glowFill;
-        ctx.shadowColor = glowFill;
       }
 
-      // Colored radial gradient glow
-      const gr = cell.glowRadius ?? 18;
-      if (gr > 0) {
-        const grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, gr);
-        grad.addColorStop(0, glowCenter + (a * 0.7) + ")");
-        grad.addColorStop(0.4, glowMid + (a * 0.28) + ")");
-        grad.addColorStop(1, glowCenter + "0)");
-        ctx.fillStyle = grad;
-        ctx.fillRect(cx - gr, cy - gr, gr * 2, gr * 2);
-      }
-
-      // Colored text with shadow
-      ctx.fillStyle = glowFill;
-      ctx.globalAlpha = Math.min(1, a * 0.95);
-      ctx.shadowBlur = gr > 0 ? 10 : 0;
-      ctx.fillText(cell.char, x, y);
-      ctx.globalAlpha = 1;
+      const sprite = getGlowSprite(cR, cG, cB, gr, cell.brightness);
+      ctx.drawImage(sprite, cx - gr, cy - gr, gr * 2, gr * 2);
     }
-    ctx.shadowBlur = 0;
+
+    // Pass 2: Draw all text (no shadowBlur — glow sprite handles it)
+    prevHex = "";
+    for (let i = 0; i < count; i++) {
+      const cell = glowCells[i];
+      const x = padLeft + cell.col * grid.charW;
+      const y = padTop + cell.row * grid.charH;
+
+      if (cell.color !== prevHex) {
+        prevHex = cell.color;
+        cR = parseInt(cell.color.slice(1, 3), 16) || 0;
+        cG = parseInt(cell.color.slice(3, 5), 16) || 0;
+        cB = parseInt(cell.color.slice(5, 7), 16) || 0;
+        glowFill = `rgb(${cR},${cG},${cB})`;
+        ctx.fillStyle = glowFill;
+      }
+
+      ctx.globalAlpha = Math.min(1, cell.brightness * 0.95);
+      ctx.fillText(cell.char, x, y);
+    }
+    ctx.globalAlpha = 1;
   }
 
   // Animation loop
@@ -521,9 +553,13 @@ export function Canvas() {
   function getMaskCoords(e: React.MouseEvent): { x: number; y: number } | null {
     const container = containerRef.current;
     if (!container || !imgRef.current) return null;
-    const rect = container.getBoundingClientRect();
-    const relX = (e.clientX - rect.left) / rect.width;
-    const relY = (e.clientY - rect.top) / rect.height;
+    if (displayRect.w === 0 || displayRect.h === 0) return null;
+    const vpRect = container.getBoundingClientRect();
+    const canvasX = vpRect.left + displayRect.x;
+    const canvasY = vpRect.top + displayRect.y;
+    const relX = (e.clientX - canvasX) / displayRect.w;
+    const relY = (e.clientY - canvasY) / displayRect.h;
+    if (relX < 0 || relX > 1 || relY < 0 || relY > 1) return null;
     return {
       x: Math.floor(relX * imgSize.w),
       y: Math.floor(relY * imgSize.h),
@@ -534,8 +570,10 @@ export function Canvas() {
     const m = useEditorStore.getState().mask;
     if (!m) return;
     const value = activeTool === "brush-fg" ? 0 : 255;
-    const scale = imgSize.w / (containerRef.current?.getBoundingClientRect().width || 1);
-    const r = Math.floor(brushSize * scale);
+    const scaleX = imgSize.w / (displayRect.w || 1);
+    const scaleY = imgSize.h / (displayRect.h || 1);
+    const r = Math.floor(brushSize * scaleX);
+    const ry = Math.floor(brushSize * scaleY);
 
     const prev = lastPaintRef.current;
     if (prev) {
@@ -551,7 +589,7 @@ export function Canvas() {
       let steps = 0;
       while (true) {
         if (steps % step === 0 || (cx === x && cy === y)) {
-          m.paintBrush(cx, cy, r, value, maskFeather);
+          m.paintBrush(cx, cy, r, value, maskFeather, ry);
         }
         if (cx === x && cy === y) break;
         const e2 = 2 * err;
@@ -561,7 +599,7 @@ export function Canvas() {
         if (steps > 100000) break; // safety
       }
     } else {
-      m.paintBrush(x, y, r, value, maskFeather);
+      m.paintBrush(x, y, r, value, maskFeather, ry);
     }
 
     lastPaintRef.current = { x, y };
@@ -627,7 +665,6 @@ export function Canvas() {
   }
 
   const fontSize = scene.ascii.fontSize;
-  const fontFamily = scene.ascii.fontFamily;
 
   function handleFileInput(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -640,13 +677,25 @@ export function Canvas() {
   }
 
   const preStyle: React.CSSProperties = {
-    fontFamily,
     fontSize,
     lineHeight: scene.ascii.lineHeight,
     letterSpacing: scene.ascii.letterSpacing,
   };
 
   const isBrushTool = activeTool === "brush-fg" || activeTool === "brush-bg";
+
+  const brushCursor = (() => {
+    if (!isBrushTool) return undefined;
+    const maxSize = 64;
+    // Account for zoom — the cursor is outside the zoom transform
+    const visualSize = Math.min(Math.round(brushSize * zoom), maxSize);
+    const size = Math.max(4, visualSize);
+    const r = Math.max(1, size / 2 - 1);
+    const cx = size / 2;
+    const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${size}' height='${size}'><circle cx='${cx}' cy='${cx}' r='${r}' fill='none' stroke='white' stroke-width='1.5'/></svg>`;
+    const hotspot = Math.floor(size / 2);
+    return `url("data:image/svg+xml,${encodeURIComponent(svg)}") ${hotspot} ${hotspot}, crosshair`;
+  })();
 
   return (
     <div
@@ -655,7 +704,7 @@ export function Canvas() {
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      style={{ cursor: activeTool === "pan" ? "grab" : isBrushTool ? "crosshair" : undefined }}
+      style={{ cursor: activeTool === "pan" ? "grab" : brushCursor }}
     >
       {draggingOver && (
         <div className="drop-overlay">
@@ -675,7 +724,15 @@ export function Canvas() {
       ) : (
         <div
           className="viewport-canvas"
-          style={{ width: "100%", height: "100%", position: "relative", transform: `scale(${zoom}) translate(${panX}px, ${panY}px)`, transformOrigin: "center center" }}
+          style={{
+            position: "absolute",
+            left: displayRect.x,
+            top: displayRect.y,
+            width: displayRect.w,
+            height: displayRect.h,
+            transform: `scale(${zoom}) translate(${panX}px, ${panY}px)`,
+            transformOrigin: "center center",
+          }}
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
@@ -686,7 +743,7 @@ export function Canvas() {
             style={{
               position: "absolute",
               inset: 0,
-              backgroundSize: "cover",
+              backgroundSize: "100% 100%",
               backgroundPosition: "center",
               transform: "scale(1.03)",
               opacity: 0.86,
@@ -772,12 +829,23 @@ export function Canvas() {
           <span>{grid.cols} x {grid.rows} chars</span>
         </div>
       )}
-      {playing && (
-        <div
-          ref={perfRef}
-          className="perf-overlay"
-        />
-      )}
+      <div className="perf-overlay-wrap">
+        <button
+          className="perf-toggle-btn"
+          onClick={() => setShowPerf((v) => !v)}
+          title="Toggle perf overlay"
+        >
+          <ChartLine size={12} />
+        </button>
+        {showPerf && (
+          <div
+            ref={perfRef}
+            className="perf-overlay"
+          >
+            {!playing ? "paused" : null}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

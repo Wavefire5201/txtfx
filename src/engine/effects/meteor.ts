@@ -1,4 +1,5 @@
 import type { AsciiEffect, GridInfo, MaskGrid, EffectCell, ControlDescriptor } from "./types";
+import { type ColorMode, pickColor, readColors, readColorMode, colorControls } from "./color-util";
 
 interface Trail {
   c: number;
@@ -13,6 +14,7 @@ interface MeteorState {
   maxAge: number;
   speed: number;
   trail: Trail[];
+  color: string;
 }
 
 export class MeteorEffect implements AsciiEffect {
@@ -22,6 +24,7 @@ export class MeteorEffect implements AsciiEffect {
   private nextSpawn = 1.0;
   private dc = 0;
   private dr = 0;
+  private spawnCounter = 0;
 
   private angle = -75;
   private intervalMin = 3;
@@ -29,7 +32,8 @@ export class MeteorEffect implements AsciiEffect {
   private speedMin = 22;
   private speedMax = 36;
   private trailLength = 25;
-  private color = "#ffaa33";
+  private colors: string[] = ["#ffaa33"];
+  private colorMode: ColorMode = "random";
   private glowRadius = 14;
   private _cells: EffectCell[] = [];
 
@@ -41,13 +45,15 @@ export class MeteorEffect implements AsciiEffect {
     this.speedMin = (params.speedMin as number) ?? 22;
     this.speedMax = (params.speedMax as number) ?? 36;
     this.trailLength = (params.trailLength as number) ?? 25;
-    this.color = (params.color as string) ?? "#ffaa33";
+    this.colors = readColors(params, "#ffaa33");
+    this.colorMode = readColorMode(params);
     this.glowRadius = (params.glowRadius as number) ?? 14;
 
     this.dc = Math.cos((this.angle * Math.PI) / 180);
     this.dr = Math.sin((-this.angle * Math.PI) / 180);
     this.meteors = [];
     this.nextSpawn = 1.0;
+    this.spawnCounter = 0;
   }
 
   update(dt: number, time: number, _mask: MaskGrid): EffectCell[] {
@@ -55,6 +61,9 @@ export class MeteorEffect implements AsciiEffect {
     const cells = this._cells; cells.length = 0;
 
     if (time > this.nextSpawn) {
+      const idx = this.colorMode === "random"
+        ? Math.floor(Math.random() * this.colors.length)
+        : this.spawnCounter;
       this.meteors.push({
         c: Math.random() * cols * 1.1 - cols * 0.05,
         r: -2,
@@ -62,7 +71,9 @@ export class MeteorEffect implements AsciiEffect {
         maxAge: 2.0 + Math.random() * 1.2,
         speed: this.speedMin + Math.random() * (this.speedMax - this.speedMin),
         trail: [],
+        color: pickColor(this.colors, this.colorMode === "gradient" ? "random" : this.colorMode, idx),
       });
+      this.spawnCounter++;
       this.nextSpawn = time + this.intervalMin + Math.random() * (this.intervalMax - this.intervalMin);
     }
 
@@ -85,14 +96,19 @@ export class MeteorEffect implements AsciiEffect {
         continue;
       }
 
-      for (const p of m.trail) {
+      for (let ti = 0; ti < m.trail.length; ti++) {
+        const p = m.trail[ti];
         if (p.age > 0.7) continue;
         const ch = p.age < 0.12 ? "*" : p.age < 0.35 ? "+" : ".";
         const brightness = 1 - p.age / 0.7;
-        cells.push({ row: p.r, col: p.c, char: ch, brightness, color: this.color, glowRadius: this.glowRadius });
+        // For gradient mode, gradient along trail length
+        const color = this.colorMode === "gradient"
+          ? pickColor(this.colors, this.colorMode, 0, ti / m.trail.length)
+          : m.color;
+        cells.push({ row: p.r, col: p.c, char: ch, brightness, color, glowRadius: this.glowRadius });
       }
       if (m.age < m.maxAge && !offscreen) {
-        cells.push({ row: Math.round(m.r), col: Math.round(m.c), char: "@", brightness: 1, color: this.color, glowRadius: this.glowRadius });
+        cells.push({ row: Math.round(m.r), col: Math.round(m.c), char: "@", brightness: 1, color: m.color, glowRadius: this.glowRadius });
       }
     }
 
@@ -105,7 +121,7 @@ export class MeteorEffect implements AsciiEffect {
       { key: "intervalMin", label: "Min interval (s)", type: "slider", min: 0.5, max: 10, step: 0.5, defaultValue: 3 },
       { key: "intervalMax", label: "Max interval (s)", type: "slider", min: 1, max: 20, step: 0.5, defaultValue: 7 },
       { key: "trailLength", label: "Trail length", type: "slider", min: 5, max: 50, step: 1, defaultValue: 25 },
-      { key: "color", label: "Color", type: "color", defaultValue: "#ffaa33" },
+      ...colorControls("#ffaa33"),
       { key: "glowRadius", label: "Glow radius", type: "slider", min: 0, max: 40, step: 1, defaultValue: 14 },
     ];
   }

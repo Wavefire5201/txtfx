@@ -1,4 +1,5 @@
 import type { AsciiEffect, GridInfo, MaskGrid, EffectCell, ControlDescriptor } from "./types";
+import { type ColorMode, pickColor, readColors, readColorMode, colorControls } from "./color-util";
 
 const GLITCH_CHARS = "@#$%&*!?/\\|[]{}()<>~^";
 
@@ -9,6 +10,7 @@ interface GlitchBlock {
   h: number;
   life: number;
   maxLife: number;
+  color: string;
 }
 
 export class GlitchEffect implements AsciiEffect {
@@ -16,10 +18,12 @@ export class GlitchEffect implements AsciiEffect {
   private grid: GridInfo = { cols: 0, rows: 0, charW: 0, charH: 0, fontSize: 0 };
   private blocks: GlitchBlock[] = [];
   private nextSpawn = 0;
+  private spawnCounter = 0;
   private frequency = 0.5;
   private blockSize = 8;
   private intensity = 0.6;
-  private color = "#ff3366";
+  private colors: string[] = ["#ff3366"];
+  private colorMode: ColorMode = "random";
   private _cells: EffectCell[] = [];
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
@@ -27,9 +31,11 @@ export class GlitchEffect implements AsciiEffect {
     this.frequency = (params.frequency as number) ?? 0.5;
     this.blockSize = (params.blockSize as number) ?? 8;
     this.intensity = (params.intensity as number) ?? 0.6;
-    this.color = (params.color as string) ?? "#ff3366";
+    this.colors = readColors(params, "#ff3366");
+    this.colorMode = readColorMode(params);
     this.blocks = [];
     this.nextSpawn = 0;
+    this.spawnCounter = 0;
   }
 
   update(dt: number, time: number, _mask: MaskGrid): EffectCell[] {
@@ -39,6 +45,9 @@ export class GlitchEffect implements AsciiEffect {
     if (time > this.nextSpawn) {
       const w = 2 + Math.floor(Math.random() * this.blockSize);
       const h = 1 + Math.floor(Math.random() * Math.max(1, this.blockSize / 3));
+      const idx = this.colorMode === "random"
+        ? Math.floor(Math.random() * this.colors.length)
+        : this.spawnCounter;
       this.blocks.push({
         col: Math.floor(Math.random() * Math.max(1, cols - w)),
         row: Math.floor(Math.random() * Math.max(1, rows - h)),
@@ -46,7 +55,9 @@ export class GlitchEffect implements AsciiEffect {
         h,
         life: 0,
         maxLife: 0.05 + Math.random() * 0.2,
+        color: pickColor(this.colors, this.colorMode === "gradient" ? "random" : this.colorMode, idx),
       });
+      this.spawnCounter++;
       this.nextSpawn = time + (1 / this.frequency) * (0.5 + Math.random());
     }
 
@@ -63,7 +74,7 @@ export class GlitchEffect implements AsciiEffect {
         for (let c = b.col; c < b.col + b.w && c < cols; c++) {
           if (Math.random() > this.intensity) continue;
           const ch = GLITCH_CHARS[Math.floor(Math.random() * GLITCH_CHARS.length)];
-          cells.push({ row: r, col: c, char: ch, brightness: 0.8 + Math.random() * 0.2, color: this.color });
+          cells.push({ row: r, col: c, char: ch, brightness: 0.8 + Math.random() * 0.2, color: b.color });
         }
       }
     }
@@ -76,7 +87,7 @@ export class GlitchEffect implements AsciiEffect {
       { key: "frequency", label: "Frequency (hz)", type: "slider", min: 0.1, max: 5, step: 0.1, defaultValue: 0.5 },
       { key: "blockSize", label: "Block size", type: "slider", min: 2, max: 20, step: 1, defaultValue: 8 },
       { key: "intensity", label: "Intensity", type: "slider", min: 0.1, max: 1, step: 0.05, defaultValue: 0.6 },
-      { key: "color", label: "Color", type: "color", defaultValue: "#ff3366" },
+      ...colorControls("#ff3366"),
     ];
   }
 }

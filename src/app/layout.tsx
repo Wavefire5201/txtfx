@@ -1,21 +1,21 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
 import { Analytics } from "@vercel/analytics/react";
 import "./globals.css";
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
+const jakartaSans = Plus_Jakarta_Sans({
+  variable: "--font-jakarta",
   subsets: ["latin"],
 });
 
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
+const jetbrainsMono = JetBrains_Mono({
+  variable: "--font-jb-mono",
   subsets: ["latin"],
 });
 
 export const metadata: Metadata = {
-  title: "txtfx - ASCII art effects",
-  description: "Composite animated character effects over photographs. Real-time ASCII art engine with 12 effects, mask painting, and timeline.",
+  title: "txtfx - ascii art effects",
+  description: "composite animated character effects over photographs. real-time ascii art engine with effects, mask painting, and timeline.",
 };
 
 export default function RootLayout({
@@ -24,8 +24,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable}`}>
-      <body>{children}<Analytics /></body>
+    <html lang="en" className={`${jakartaSans.variable} ${jetbrainsMono.variable}`}>
+      <body>
+        {children}
+        <Analytics />
+      </body>
     </html>
   );
 }

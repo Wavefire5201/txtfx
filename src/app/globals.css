@@ -10,14 +10,14 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --font-sans: var(--font-jakarta);
+  --font-mono: var(--font-jb-mono);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+  font-family: var(--font-jakarta), system-ui, -apple-system, sans-serif;
   margin: 0;
   padding: 0;
   -webkit-font-smoothing: antialiased;
@@ -26,15 +26,15 @@ body {
 /* ---- Landing Page ---- */
 
 .landing {
-  min-height: 100dvh;
+  height: 100dvh;
   background: #0a0a0e;
   color: #ededed;
-  overflow-x: hidden;
+  overflow: hidden;
 }
 
 .landing-hero {
   position: relative;
-  min-height: 90vh;
+  height: 100dvh;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -50,12 +50,14 @@ body {
 }
 
 .landing-ascii-demo {
-  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
-  font-size: clamp(8px, 1.2vw, 14px);
-  line-height: 1.1;
-  letter-spacing: 0.08em;
+  font-family: var(--font-jb-mono),'SFMono-Regular', Consolas, 'Liberation Mono', monospace;
+  font-size: clamp(10px, 1.4vw, 16px);
+  line-height: 1.15;
+  letter-spacing: 0.06em;
   color: rgba(125, 239, 160, 0.12);
-  text-shadow: 0 0 20px rgba(125, 239, 160, 0.06);
+  text-shadow:
+    0 0 8px rgba(125, 239, 160, 0.05),
+    0 0 30px rgba(125, 239, 160, 0.03);
   white-space: pre;
   user-select: none;
   pointer-events: none;
@@ -65,8 +67,7 @@ body {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse at center, rgba(10, 10, 14, 0.3) 0%, rgba(10, 10, 14, 0.95) 70%),
-    linear-gradient(to bottom, transparent 50%, #0a0a0e 100%);
+    radial-gradient(ellipse at center, rgba(10, 10, 14, 0.15) 0%, rgba(10, 10, 14, 0.85) 65%);
 }
 
 .landing-nav {
@@ -75,13 +76,27 @@ body {
   display: flex;
   align-items: center;
   padding: 24px 40px;
+  gap: 12px;
 }
 
 .landing-logo {
+  font-family: var(--font-jb-mono),monospace;
   font-weight: 700;
   font-size: 18px;
   letter-spacing: 0.08em;
   color: #fff;
+}
+
+.landing-dev-badge {
+  font-family: var(--font-jb-mono),monospace;
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0.03em;
+  color: #a0a0a0;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  padding: 3px 10px;
 }
 
 .landing-nav-spacer {
@@ -95,6 +110,8 @@ body {
   padding: 6px 16px;
   border-radius: 6px;
   transition: color 0.2s, background 0.2s;
+  display: inline-flex;
+  align-items: center;
 }
 
 .landing-nav-link:hover {
@@ -111,7 +128,7 @@ body {
   align-items: center;
   justify-content: center;
   text-align: center;
-  padding: 0 24px 80px;
+  padding: 0 24px;
   gap: 24px;
 }
 
@@ -160,69 +177,16 @@ body {
   transform: translateY(0);
 }
 
-/* Features */
-
-.landing-features {
-  position: relative;
-  padding: 80px 40px 100px;
-  max-width: 1000px;
-  margin: 0 auto;
-}
-
-.landing-features-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 32px;
-}
-
-.landing-feature {
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 12px;
-  padding: 28px 24px;
-  transition: border-color 0.2s, background 0.2s;
-}
-
-.landing-feature:hover {
-  border-color: rgba(125, 239, 160, 0.15);
-  background: rgba(255, 255, 255, 0.03);
-}
-
-.landing-feature-icon {
-  color: var(--accent);
-  margin-bottom: 16px;
-  opacity: 0.8;
-}
-
-.landing-feature-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: #fff;
-  margin-bottom: 8px;
-}
-
-.landing-feature-desc {
-  font-size: 14px;
-  line-height: 1.6;
-  color: #777;
-}
-
-/* Footer */
+/* Footer (pinned to bottom of viewport) */
 
 .landing-footer {
+  position: relative;
+  z-index: 10;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  padding: 32px 24px;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.landing-footer-logo {
-  font-weight: 600;
-  font-size: 13px;
-  color: #666;
-  letter-spacing: 0.06em;
+  gap: 8px;
+  padding: 20px 24px;
 }
 
 .landing-footer-sep {

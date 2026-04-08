@@ -1,4 +1,5 @@
 import type { AsciiEffect, GridInfo, MaskGrid, EffectCell, ControlDescriptor } from "./types";
+import { type ColorMode, pickColor, readColors, readColorMode, colorControls } from "./color-util";
 
 interface Particle {
   c: number;
@@ -8,6 +9,8 @@ interface Particle {
   life: number;
   maxLife: number;
   charIdx: number;
+  color: string;
+  colorIdx: number;
 }
 
 export class CustomEmitterEffect implements AsciiEffect {
@@ -25,7 +28,9 @@ export class CustomEmitterEffect implements AsciiEffect {
   private spawnX = 0.5; // 0-1 normalized
   private spawnY = 1.0;
   private spawnAccum = 0;
-  private color = "#ffffff";
+  private spawnCounter = 0;
+  private colors: string[] = ["#ffffff"];
+  private colorMode: ColorMode = "random";
   private glowRadius = 14;
   private _cells: EffectCell[] = [];
 
@@ -40,10 +45,12 @@ export class CustomEmitterEffect implements AsciiEffect {
     this.lifetime = (params.lifetime as number) ?? 2;
     this.spawnX = (params.spawnX as number) ?? 0.5;
     this.spawnY = (params.spawnY as number) ?? 1.0;
-    this.color = (params.color as string) ?? "#ffffff";
+    this.colors = readColors(params, "#ffffff");
+    this.colorMode = readColorMode(params);
     this.glowRadius = (params.glowRadius as number) ?? 14;
     this.particles = [];
     this.spawnAccum = 0;
+    this.spawnCounter = 0;
   }
 
   update(dt: number, _time: number, _mask: MaskGrid): EffectCell[] {
@@ -57,6 +64,9 @@ export class CustomEmitterEffect implements AsciiEffect {
     for (let i = 0; i < count; i++) {
       const angle = ((this.direction + (Math.random() - 0.5) * this.spread) * Math.PI) / 180;
       const spd = this.speed * (0.7 + Math.random() * 0.6);
+      const idx = this.colorMode === "random"
+        ? Math.floor(Math.random() * this.colors.length)
+        : this.spawnCounter;
       this.particles.push({
         c: this.spawnX * cols,
         r: this.spawnY * rows,
@@ -65,7 +75,10 @@ export class CustomEmitterEffect implements AsciiEffect {
         life: 0,
         maxLife: this.lifetime * (0.5 + Math.random()),
         charIdx: Math.floor(Math.random() * this.chars.length),
+        color: pickColor(this.colors, this.colorMode === "gradient" ? "random" : this.colorMode, idx),
+        colorIdx: idx,
       });
+      this.spawnCounter++;
     }
 
     for (let i = this.particles.length - 1; i >= 0; i--) {
@@ -86,12 +99,16 @@ export class CustomEmitterEffect implements AsciiEffect {
       if (r >= 0 && r < rows && c >= 0 && c < cols) {
         const t = p.life / p.maxLife;
         const charProgress = Math.min(Math.floor(t * this.chars.length), this.chars.length - 1);
+        // For gradient mode, use lifecycle position
+        const color = this.colorMode === "gradient"
+          ? pickColor(this.colors, this.colorMode, p.colorIdx, t)
+          : p.color;
         cells.push({
           row: r,
           col: c,
           char: this.chars[charProgress],
           brightness: 1 - t,
-          color: this.color,
+          color,
           glowRadius: this.glowRadius,
         });
       }
@@ -111,7 +128,7 @@ export class CustomEmitterEffect implements AsciiEffect {
       { key: "lifetime", label: "Lifetime (s)", type: "slider", min: 0.2, max: 5, step: 0.1, defaultValue: 2 },
       { key: "spawnX", label: "Spawn X", type: "slider", min: 0, max: 1, step: 0.05, defaultValue: 0.5 },
       { key: "spawnY", label: "Spawn Y", type: "slider", min: 0, max: 1, step: 0.05, defaultValue: 1 },
-      { key: "color", label: "Color", type: "color", defaultValue: "#ffffff" },
+      ...colorControls("#ffffff"),
       { key: "glowRadius", label: "Glow radius", type: "slider", min: 0, max: 40, step: 1, defaultValue: 14 },
     ];
   }

@@ -39,16 +39,22 @@ export class Mask {
    * Paint a circular brush stroke onto the mask.
    * value: 0 for foreground, 255 for background.
    */
-  paintBrush(cx: number, cy: number, radius: number, value: number, feather = 0): void {
-    const r = Math.ceil(radius + feather);
-    for (let dy = -r; dy <= r; dy++) {
-      for (let dx = -r; dx <= r; dx++) {
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist > radius + feather) continue;
+  paintBrush(cx: number, cy: number, radius: number, value: number, feather = 0, radiusY?: number): void {
+    const ry = radiusY ?? radius;
+    const rx = radius;
+    const extX = Math.ceil(rx + feather);
+    const extY = Math.ceil(ry + feather);
+    for (let dy = -extY; dy <= extY; dy++) {
+      for (let dx = -extX; dx <= extX; dx++) {
+        // Normalized distance: 1.0 at the ellipse edge
+        const nx = rx > 0 ? dx / rx : 0;
+        const ny = ry > 0 ? dy / ry : 0;
+        const normDist = Math.sqrt(nx * nx + ny * ny);
+        if (normDist > 1 + (feather / Math.max(rx, ry))) continue;
 
         let strength = 1;
-        if (feather > 0 && dist > radius) {
-          strength = 1 - (dist - radius) / feather;
+        if (feather > 0 && normDist > 1) {
+          strength = 1 - (normDist - 1) / (feather / Math.max(rx, ry));
         }
 
         const px = cx + dx;
@@ -57,8 +63,7 @@ export class Mask {
 
         const idx = py * this.width + px;
         const current = this.data[idx];
-        const target = value;
-        this.data[idx] = Math.round(current + (target - current) * strength);
+        this.data[idx] = Math.round(current + (value - current) * strength);
       }
     }
   }

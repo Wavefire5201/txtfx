@@ -5,11 +5,13 @@ import * as Slider from "@radix-ui/react-slider";
 import { useEditorStore } from "@/lib/store";
 import {
   PaintBrush,
-  MagicWand,
+  PaintBrushHousehold,
   Hand,
   Eye,
   EyeSlash,
   Eraser,
+  CaretLeft,
+  CaretRight,
 } from "@phosphor-icons/react";
 import { ConfirmDialog } from "./ConfirmDialog";
 
@@ -28,10 +30,12 @@ export function ToolPanel() {
   const toggleLayer = useEditorStore((s) => s.toggleLayer);
   const mask = useEditorStore((s) => s.mask);
   const bumpMaskVersion = useEditorStore((s) => s.bumpMaskVersion);
+  const collapsed = useEditorStore((s) => s.leftPanelCollapsed);
+  const toggleCollapsed = useEditorStore((s) => s.toggleLeftPanel);
 
   const tools = [
     { id: "brush-fg" as const, icon: <PaintBrush size={16} />, title: "Foreground brush (B)", shortcut: "B" },
-    { id: "brush-bg" as const, icon: <MagicWand size={16} />, title: "Background brush (N)", shortcut: "N" },
+    { id: "brush-bg" as const, icon: <PaintBrushHousehold size={16} />, title: "Background brush (N)", shortcut: "N" },
     { id: "pan" as const, icon: <Hand size={16} />, title: "Pan (V)", shortcut: "V" },
   ];
 
@@ -42,10 +46,48 @@ export function ToolPanel() {
     }
   }
 
+  if (collapsed) {
+    return (
+      <div className="panel panel--collapsed" role="complementary" aria-label="Tools and layers">
+        <button
+          className="panel-collapse-btn"
+          onClick={toggleCollapsed}
+          title="Expand panel"
+          aria-label="Expand tools panel"
+        >
+          <CaretRight size={12} />
+        </button>
+        <div className="panel-collapsed-tools">
+          {tools.map((t) => (
+            <button
+              key={t.id}
+              className={`tool-btn ${activeTool === t.id ? "tool-btn--active" : ""}`}
+              title={t.title}
+              aria-label={t.title}
+              onClick={() => setActiveTool(t.id)}
+            >
+              {t.icon}
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="panel" role="complementary" aria-label="Tools and layers">
       <div className="panel-section">
-        <div className="panel-label">Tools</div>
+        <div className="panel-label">
+          <span>Tools</span>
+          <button
+            className="panel-collapse-btn"
+            onClick={toggleCollapsed}
+            title="Collapse panel"
+            aria-label="Collapse tools panel"
+          >
+            <CaretLeft size={12} />
+          </button>
+        </div>
         <div className="tool-grid">
           {tools.map((t) => (
             <button
@@ -64,20 +106,6 @@ export function ToolPanel() {
 
       <div className="panel-section">
         <div className="panel-label">Mask</div>
-        <div className="mask-actions">
-          <button
-            className={`mask-btn ${activeTool === "brush-fg" ? "mask-btn--active" : ""}`}
-            onClick={() => setActiveTool("brush-fg")}
-          >
-            Foreground
-          </button>
-          <button
-            className={`mask-btn ${activeTool === "brush-bg" ? "mask-btn--active" : ""}`}
-            onClick={() => setActiveTool("brush-bg")}
-          >
-            Background
-          </button>
-        </div>
         <div className="prop-row">
           <span className="prop-label">Brush size</span>
           <span className="prop-value">{brushSize}px</span>

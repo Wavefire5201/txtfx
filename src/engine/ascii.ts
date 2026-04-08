@@ -20,8 +20,19 @@ export function measureGrid(container: HTMLElement): GridInfo {
   const style = getComputedStyle(container);
   const fontSize = parseFloat(style.fontSize);
   const lineHeight = parseFloat(style.lineHeight);
-  const letterSpacing = parseFloat(style.letterSpacing) || 0;
-  const charW = fontSize * 0.6 + letterSpacing;
+
+  // Measure actual character width instead of guessing (fonts vary)
+  const span = document.createElement("span");
+  span.style.font = style.font;
+  span.style.letterSpacing = style.letterSpacing;
+  span.style.position = "absolute";
+  span.style.visibility = "hidden";
+  span.style.whiteSpace = "pre";
+  span.textContent = "X".repeat(20);
+  document.body.appendChild(span);
+  const charW = span.getBoundingClientRect().width / 20;
+  document.body.removeChild(span);
+
   const charH = lineHeight;
   const rect = container.getBoundingClientRect();
   const cols = Math.floor((rect.width - 16) / charW);

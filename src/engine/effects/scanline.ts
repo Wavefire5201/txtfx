@@ -1,4 +1,5 @@
 import type { AsciiEffect, GridInfo, MaskGrid, EffectCell, ControlDescriptor } from "./types";
+import { type ColorMode, pickColor, readColors, readColorMode, colorControls } from "./color-util";
 
 export class ScanlineEffect implements AsciiEffect {
   type = "scanline";
@@ -7,7 +8,8 @@ export class ScanlineEffect implements AsciiEffect {
   private width = 2;
   private brightness = 1;
   private count = 1;
-  private color = "#88ccff";
+  private colors: string[] = ["#88ccff"];
+  private colorMode: ColorMode = "random";
   private glowRadius = 16;
   private chars = "=-~";
   private _cells: EffectCell[] = [];
@@ -18,7 +20,8 @@ export class ScanlineEffect implements AsciiEffect {
     this.width = (params.width as number) ?? 2;
     this.brightness = (params.brightness as number) ?? 1;
     this.count = (params.count as number) ?? 1;
-    this.color = (params.color as string) ?? "#88ccff";
+    this.colors = readColors(params, "#88ccff");
+    this.colorMode = readColorMode(params);
     this.glowRadius = (params.glowRadius as number) ?? 16;
     this.chars = (params.chars as string) ?? "=-~";
   }
@@ -31,6 +34,10 @@ export class ScanlineEffect implements AsciiEffect {
       // Each scanline is offset evenly across the grid height
       const phase = (s / this.count) * rows;
       const headRow = ((time * this.speed + phase) % (rows + this.width)) - this.width;
+
+      // Pick color per scanline
+      const baseColor = pickColor(this.colors, this.colorMode === "gradient" ? "random" : this.colorMode,
+        this.colorMode === "random" ? Math.floor(Math.random() * this.colors.length) : s);
 
       for (let w = 0; w < this.width; w++) {
         const r = Math.floor(headRow + w);
@@ -46,7 +53,11 @@ export class ScanlineEffect implements AsciiEffect {
           // Slight horizontal variation for visual interest
           const flicker = Math.sin(c * 0.5 + time * 12 + s * 3) * 0.15;
           const finalB = Math.max(0.1, b + flicker);
-          cells.push({ row: r, col: c, char: ch, brightness: finalB, color: this.color, glowRadius: gr });
+          // For gradient mode, gradient across width
+          const color = this.colorMode === "gradient"
+            ? pickColor(this.colors, this.colorMode, 0, c / cols)
+            : baseColor;
+          cells.push({ row: r, col: c, char: ch, brightness: finalB, color, glowRadius: gr });
         }
       }
     }
@@ -60,7 +71,7 @@ export class ScanlineEffect implements AsciiEffect {
       { key: "width", label: "Line width", type: "slider", min: 1, max: 8, step: 1, defaultValue: 2 },
       { key: "count", label: "Line count", type: "slider", min: 1, max: 5, step: 1, defaultValue: 1 },
       { key: "brightness", label: "Brightness", type: "slider", min: 0.2, max: 1, step: 0.05, defaultValue: 1 },
-      { key: "color", label: "Color", type: "color", defaultValue: "#88ccff" },
+      ...colorControls("#88ccff"),
       { key: "glowRadius", label: "Glow radius", type: "slider", min: 0, max: 40, step: 1, defaultValue: 16 },
     ];
   }

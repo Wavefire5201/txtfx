@@ -7,7 +7,7 @@ export interface ActiveEffect {
   enabled: boolean;
   timelineStart: number;
   timelineEnd: number | null;
-  loop: boolean;
+  mode: "continuous" | "one-shot";
   applyToAscii: boolean;
 }
 
@@ -131,7 +131,7 @@ export function compositeFrame(
 
     let effectTime = time - fx.timelineStart;
     // Handle per-effect looping
-    if (fx.loop && fx.timelineEnd !== null) {
+    if (fx.mode === "continuous" && fx.timelineEnd !== null) {
       const effectDuration = fx.timelineEnd - fx.timelineStart;
       if (effectDuration > 0) {
         effectTime = effectTime % effectDuration;

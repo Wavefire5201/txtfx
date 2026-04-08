@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import Link from "next/link";
-import { ArrowRight, Sparkle, Lightning, FilmStrip } from "@phosphor-icons/react";
+import { ArrowRight, GithubLogo } from "@phosphor-icons/react";
 
 const DEMO_CHARS = " .`,:;cbaO0%#@";
 const STAR_CHARS = [" ", ".", "+", "*"];
@@ -78,15 +78,9 @@ function useAsciiDemo() {
 
 export default function LandingPage() {
   const demoRef = useAsciiDemo();
-  const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   return (
     <div className="landing">
-      {/* Hero */}
       <section className="landing-hero">
         <div className="landing-hero-bg">
           <pre
@@ -98,7 +92,17 @@ export default function LandingPage() {
 
         <nav className="landing-nav">
           <span className="landing-logo">txtfx</span>
+          <span className="landing-dev-badge">in development</span>
           <div className="landing-nav-spacer" />
+          <a
+            href="https://github.com/Wavefire5201/txtfx"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="landing-nav-link"
+            aria-label="GitHub"
+          >
+            <GithubLogo size={20} weight="bold" />
+          </a>
           <Link href="/editor" className="landing-nav-link">
             Editor
           </Link>
@@ -106,11 +110,11 @@ export default function LandingPage() {
 
         <div className="landing-hero-content">
           <h1 className="landing-title">
-            Animated ASCII effects<br />over your photographs
+            animated ascii effects<br />over your images
           </h1>
           <p className="landing-subtitle">
-            Composite character-based visual effects on any image.
-            Twinkle, rain, fire, matrix rain, and more -- all rendered in real-time ASCII art.
+            composite character-based visual effects on any image.
+            {/* twinkle, rain, fire, matrix rain, and more — all rendered in real-time ascii art. */}
           </p>
           <div className="landing-cta-row">
             <Link href="/editor" className="landing-cta">
@@ -119,52 +123,13 @@ export default function LandingPage() {
             </Link>
           </div>
         </div>
-      </section>
 
-      {/* Features */}
-      <section className="landing-features">
-        <div className="landing-features-grid">
-          <div className="landing-feature">
-            <div className="landing-feature-icon">
-              <Sparkle size={24} />
-            </div>
-            <h3 className="landing-feature-title">12 Built-in Effects</h3>
-            <p className="landing-feature-desc">
-              From twinkling stars to matrix rain, fire, snow, meteors, and glitch effects.
-              Each fully configurable with real-time parameter controls.
-            </p>
-          </div>
-          <div className="landing-feature">
-            <div className="landing-feature-icon">
-              <Lightning size={24} />
-            </div>
-            <h3 className="landing-feature-title">Mask-based Compositing</h3>
-            <p className="landing-feature-desc">
-              Paint foreground and background regions to control exactly where
-              effects appear. Feathered edges for smooth transitions.
-            </p>
-          </div>
-          <div className="landing-feature">
-            <div className="landing-feature-icon">
-              <FilmStrip size={24} />
-            </div>
-            <h3 className="landing-feature-title">Timeline & Export</h3>
-            <p className="landing-feature-desc">
-              Full timeline with playback controls. Export as standalone HTML,
-              embeddable snippets, or scene files for later editing.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      {/* Footer */}
-      {mounted && (
         <footer className="landing-footer">
-          <span className="landing-footer-logo">txtfx</span>
-          <span className="landing-footer-sep">--</span>
-          <span className="landing-footer-text">ASCII art effects engine</span>
+          <span className="landing-footer-text">ascii art effects engine</span>
+          <span className="landing-footer-sep">·</span>
+          <span className="landing-footer-text">in development</span>
         </footer>
-      )}
+      </section>
     </div>
   );
 }

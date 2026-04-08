@@ -3,7 +3,7 @@
 import { useRef, useCallback, useState, useEffect } from "react";
 import { useEditorStore } from "@/lib/store";
 import { EFFECT_LABELS } from "@/engine/effects";
-import { SkipBack, Play, Pause, SkipForward, Repeat, RepeatOnce } from "@phosphor-icons/react";
+import { SkipBack, Play, Pause, SkipForward, CaretUp, CaretDown } from "@phosphor-icons/react";
 
 export function Timeline() {
   const scene = useEditorStore((s) => s.scene);
@@ -13,6 +13,8 @@ export function Timeline() {
   const setCurrentTime = useEditorStore((s) => s.setCurrentTime);
   const updatePlayback = useEditorStore((s) => s.updatePlayback);
   const updateEffect = useEditorStore((s) => s.updateEffect);
+  const timelineCollapsed = useEditorStore((s) => s.timelineCollapsed);
+  const toggleTimeline = useEditorStore((s) => s.toggleTimeline);
   const rulerRef = useRef<HTMLDivElement>(null);
   const [dragging, setDragging] = useState<{ id: string; edge: "start" | "end" | "move"; startX: number; origStart: number; origEnd: number | null } | null>(null);
 
@@ -81,10 +83,10 @@ export function Timeline() {
 
       if (dragging.edge === "start") {
         const newStart = Math.max(0, Math.min(dragging.origEnd ?? duration, dragging.origStart + deltaTime));
-        updateEffect(dragging.id, { timeline: { start: Math.round(newStart * 10) / 10, end: dragging.origEnd, loop: true } });
+        updateEffect(dragging.id, { timeline: { start: Math.round(newStart * 10) / 10, end: dragging.origEnd, mode: "continuous" } });
       } else if (dragging.edge === "end") {
         const newEnd = Math.max(dragging.origStart, Math.min(duration, (dragging.origEnd ?? duration) + deltaTime));
-        updateEffect(dragging.id, { timeline: { start: dragging.origStart, end: Math.round(newEnd * 10) / 10, loop: true } });
+        updateEffect(dragging.id, { timeline: { start: dragging.origStart, end: Math.round(newEnd * 10) / 10, mode: "continuous" } });
       }
     };
 
@@ -119,18 +121,6 @@ export function Timeline() {
           {formatTime(currentTime)} / {formatTime(duration)}
         </span>
         <div className="toolbar-spacer" />
-        <button
-          className="timeline-btn timeline-btn-loop"
-          onClick={() => updatePlayback({ loop: !scene.playback.loop })}
-          title={scene.playback.loop ? "Loop enabled" : "Play once"}
-        >
-          {scene.playback.loop ? (
-            <Repeat size={14} weight="bold" />
-          ) : (
-            <RepeatOnce size={14} />
-          )}
-        </button>
-        <span className="toolbar-sep">|</span>
         <span className="timeline-setting">
           <label className="timeline-setting-label">Duration</label>
           <input
@@ -156,9 +146,12 @@ export function Timeline() {
             onChange={(e) => updatePlayback({ fps: Math.max(1, Math.min(60, Number(e.target.value) || 30)) })}
           />
         </span>
+        <button className="timeline-btn" onClick={toggleTimeline} title={timelineCollapsed ? "Expand timeline" : "Collapse timeline"}>
+          {timelineCollapsed ? <CaretUp size={14} /> : <CaretDown size={14} />}
+        </button>
       </div>
 
-      <div className="timeline-tracks">
+      {!timelineCollapsed && <div className="timeline-tracks">
         <div className="timeline-labels">
           {scene.effects.length === 0 && (
             <div className="timeline-label timeline-label--disabled" style={{ fontStyle: "italic" }}>
@@ -230,7 +223,7 @@ export function Timeline() {
             );
           })}
         </div>
-      </div>
+      </div>}
     </div>
   );
 }

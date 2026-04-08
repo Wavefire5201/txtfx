@@ -23,12 +23,12 @@ export interface EffectCell {
 export interface ControlDescriptor {
   key: string;
   label: string;
-  type: "slider" | "select" | "toggle" | "text" | "color";
+  type: "slider" | "select" | "toggle" | "text" | "color" | "colors";
   min?: number;
   max?: number;
   step?: number;
   options?: { label: string; value: string }[];
-  defaultValue: number | string | boolean;
+  defaultValue: number | string | boolean | string[];
 }
 
 export interface AsciiEffect {

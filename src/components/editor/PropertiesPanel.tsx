@@ -8,6 +8,18 @@ import { createEffect, EFFECT_LABELS, type EffectType } from "@/engine/effects";
 import type { ControlDescriptor } from "@/engine/effects/types";
 import { toast } from "./Toast";
 
+function hslToHex(h: number, s: number, l: number): string {
+  s /= 100;
+  l /= 100;
+  const a = s * Math.min(l, 1 - l);
+  const f = (n: number) => {
+    const k = (n + h / 30) % 12;
+    const color = l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+    return Math.round(255 * color).toString(16).padStart(2, "0");
+  };
+  return `${f(0)}${f(8)}${f(4)}`;
+}
+
 function getPresets(type: string): Record<string, Record<string, unknown>> {
   try {
     const saved = localStorage.getItem(`txtfx-presets-${type}`);
@@ -29,6 +41,7 @@ function deletePreset(type: string, name: string) {
 import {
   CaretDown,
   CaretRight,
+  CaretLeft,
   Trash,
   Plus,
   Sparkle,
@@ -185,6 +198,53 @@ function EffectControl({
     );
   }
 
+  if (descriptor.type === "colors") {
+    const colorList = Array.isArray(current) ? current as string[] : [String(current)];
+    return (
+      <div className="effect-control">
+        <div className="prop-row">
+          <span className="prop-label">{descriptor.label}</span>
+        </div>
+        <div className="color-list">
+          {colorList.map((c, i) => (
+            <div key={i} className="color-swatch-wrap">
+              <input
+                type="color"
+                className="color-swatch"
+                value={c}
+                onChange={(e) => {
+                  const next = [...colorList];
+                  next[i] = e.target.value;
+                  onChange(descriptor.key, next);
+                }}
+              />
+              {colorList.length > 1 && (
+                <button
+                  className="color-remove"
+                  onClick={() => {
+                    onChange(descriptor.key, colorList.filter((_, j) => j !== i));
+                  }}
+                >
+                  &times;
+                </button>
+              )}
+            </div>
+          ))}
+          <button
+            className="color-add"
+            onClick={() => {
+              const hue = Math.floor(Math.random() * 360);
+              const hex = `#${hslToHex(hue, 80, 60)}`;
+              onChange(descriptor.key, [...colorList, hex]);
+            }}
+          >
+            +
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return null;
 }
 
@@ -199,15 +259,43 @@ export function PropertiesPanel() {
   const expandedEffects = useEditorStore((s) => s.expandedEffects);
   const toggleExpandEffect = useEditorStore((s) => s.toggleExpandEffect);
   const reorderEffect = useEditorStore((s) => s.reorderEffect);
+  const collapsed = useEditorStore((s) => s.rightPanelCollapsed);
+  const toggleCollapsed = useEditorStore((s) => s.toggleRightPanel);
 
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
+  if (collapsed) {
+    return (
+      <div className="panel panel--collapsed panel--collapsed-right" role="complementary" aria-label="Effect properties">
+        <button
+          className="panel-collapse-btn"
+          onClick={toggleCollapsed}
+          title="Expand panel"
+          aria-label="Expand properties panel"
+        >
+          <CaretLeft size={12} />
+        </button>
+        <span className="panel-collapsed-label">Properties</span>
+      </div>
+    );
+  }
+
   return (
     <div className="panel properties-panel" role="complementary" aria-label="Effect properties">
       <div className="panel-section">
-        <div className="panel-label">ASCII Settings</div>
+        <div className="panel-label">
+          <span>ASCII Settings</span>
+          <button
+            className="panel-collapse-btn"
+            onClick={toggleCollapsed}
+            title="Collapse panel"
+            aria-label="Collapse properties panel"
+          >
+            <CaretRight size={12} />
+          </button>
+        </div>
         <div className="prop-row">
           <span className="prop-label">Opacity</span>
           <span className="prop-value">{Math.round(scene.ascii.opacity * 100)}%</span>
@@ -353,16 +441,17 @@ export function PropertiesPanel() {
                     </div>
 
                     <div className="effect-card-region">
-                      <span className="prop-label">Loop effect</span>
-                      <Switch.Root
-                        className="switch-root"
-                        checked={fx.timeline.loop}
-                        onCheckedChange={(checked) =>
-                          updateEffect(fx.id, { timeline: { ...fx.timeline, loop: checked } })
+                      <span className="prop-label">Mode</span>
+                      <select
+                        className="effect-select"
+                        value={fx.timeline.mode ?? "continuous"}
+                        onChange={(e) =>
+                          updateEffect(fx.id, { timeline: { ...fx.timeline, mode: e.target.value as "continuous" | "one-shot" } })
                         }
                       >
-                        <Switch.Thumb className="switch-thumb" />
-                      </Switch.Root>
+                        <option value="continuous">Continuous</option>
+                        <option value="one-shot">One-shot</option>
+                      </select>
                     </div>
 
                     {controls.map((ctrl) => (
@@ -437,7 +526,7 @@ export function PropertiesPanel() {
             className="add-effect-btn"
             onClick={() => setAddMenuOpen(!addMenuOpen)}
           >
-            <Plus size={14} />
+            <Plus size={16} weight="bold" />
             <span>Add Effect</span>
           </button>
 

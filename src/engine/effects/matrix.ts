@@ -1,4 +1,5 @@
 import type { AsciiEffect, GridInfo, MaskGrid, EffectCell, ControlDescriptor } from "./types";
+import { type ColorMode, pickColor, readColors, readColorMode, colorControls } from "./color-util";
 
 const MATRIX_CHARS = "0123456789abcdefABCDEF:.<>+*";
 
@@ -14,6 +15,8 @@ interface Column {
   delay: number;      // seconds before respawn after completing
   waiting: number;    // current wait timer
   chars: string[];    // fixed char per row, occasionally cycled
+  color: string;      // assigned color for this column
+  colorIdx: number;
 }
 
 export class MatrixEffect implements AsciiEffect {
@@ -23,8 +26,10 @@ export class MatrixEffect implements AsciiEffect {
   private density = 0.4;
   private speedMin = 5;
   private speedMax = 14;
-  private color = "#00ff41";
+  private colors: string[] = ["#00ff41"];
+  private colorMode: ColorMode = "random";
   private glowRadius = 10;
+  private spawnCounter = 0;
   private _cells: EffectCell[] = [];
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
@@ -32,12 +37,14 @@ export class MatrixEffect implements AsciiEffect {
     this.density = (params.density as number) ?? 0.4;
     this.speedMin = (params.speedMin as number) ?? 5;
     this.speedMax = (params.speedMax as number) ?? 14;
-    this.color = (params.color as string) ?? "#00ff41";
+    this.colors = readColors(params, "#00ff41");
+    this.colorMode = readColorMode(params);
     this.glowRadius = (params.glowRadius as number) ?? 10;
 
     // Create one column entry per grid column, but only some are active
     const { cols, rows } = grid;
     this.columns = [];
+    this.spawnCounter = 0;
     for (let c = 0; c < cols; c++) {
       if (Math.random() > this.density) continue;
       this.columns.push(this.makeColumn(rows, cols));
@@ -45,7 +52,10 @@ export class MatrixEffect implements AsciiEffect {
   }
 
   private makeColumn(rows: number, cols: number): Column {
-    return {
+    const idx = this.colorMode === "random"
+      ? Math.floor(Math.random() * this.colors.length)
+      : this.spawnCounter;
+    const col: Column = {
       col: Math.floor(Math.random() * cols),
       speed: this.speedMin + Math.random() * (this.speedMax - this.speedMin),
       phase: -(Math.random() * rows), // start off-screen with random offset
@@ -53,7 +63,11 @@ export class MatrixEffect implements AsciiEffect {
       delay: 0.5 + Math.random() * 3,
       waiting: 0,
       chars: Array.from({ length: rows }, randomChar),
+      color: pickColor(this.colors, this.colorMode === "gradient" ? "random" : this.colorMode, idx),
+      colorIdx: idx,
     };
+    this.spawnCounter++;
+    return col;
   }
 
   update(dt: number, _time: number, _mask: MaskGrid): EffectCell[] {
@@ -73,6 +87,13 @@ export class MatrixEffect implements AsciiEffect {
           // Assign a new random column position
           col.col = Math.floor(Math.random() * cols);
           col.chars = Array.from({ length: rows }, randomChar);
+          // Re-pick color on respawn
+          const idx = this.colorMode === "random"
+            ? Math.floor(Math.random() * this.colors.length)
+            : this.spawnCounter;
+          col.color = pickColor(this.colors, this.colorMode === "gradient" ? "random" : this.colorMode, idx);
+          col.colorIdx = idx;
+          this.spawnCounter++;
         }
         continue;
       }
@@ -80,8 +101,6 @@ export class MatrixEffect implements AsciiEffect {
       col.phase += col.speed * dt;
       const headRow = Math.floor(col.phase);
 
-      // Randomly pick a column position (stored as index in the array)
-      // We use the column's index to determine x position
       const c = col.col;
 
       // Cycle a random char occasionally
@@ -105,7 +124,12 @@ export class MatrixEffect implements AsciiEffect {
           brightness = Math.max(0.1, 0.5 * (1 - t));
         }
 
-        cells.push({ row: r, col: c, char: col.chars[r], brightness, color: this.color, glowRadius: this.glowRadius });
+        // For gradient mode, gradient down the column trail
+        const color = this.colorMode === "gradient"
+          ? pickColor(this.colors, this.colorMode, col.colorIdx, t)
+          : col.color;
+
+        cells.push({ row: r, col: c, char: col.chars[r], brightness, color, glowRadius: this.glowRadius });
       }
     }
 
@@ -117,7 +141,7 @@ export class MatrixEffect implements AsciiEffect {
       { key: "density", label: "Density", type: "slider", min: 0.1, max: 0.8, step: 0.05, defaultValue: 0.4 },
       { key: "speedMin", label: "Min speed", type: "slider", min: 2, max: 10, step: 1, defaultValue: 5 },
       { key: "speedMax", label: "Max speed", type: "slider", min: 5, max: 25, step: 1, defaultValue: 14 },
-      { key: "color", label: "Color", type: "color", defaultValue: "#00ff41" },
+      ...colorControls("#00ff41"),
       { key: "glowRadius", label: "Glow radius", type: "slider", min: 0, max: 40, step: 1, defaultValue: 10 },
     ];
   }

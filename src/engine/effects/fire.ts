@@ -1,4 +1,5 @@
 import type { AsciiEffect, GridInfo, MaskGrid, EffectCell, ControlDescriptor } from "./types";
+import { type ColorMode, pickColor, readColors, readColorMode, colorControls } from "./color-util";
 
 interface Ember {
   col: number;
@@ -6,6 +7,8 @@ interface Ember {
   speed: number;
   life: number;
   maxLife: number;
+  color: string;
+  colorIdx: number;
 }
 
 const FIRE_RAMP = ["@", "#", "*", "+", ".", " "];
@@ -18,7 +21,9 @@ export class FireEffect implements AsciiEffect {
   private height = 0.3;
   private spread = 1.5;
   private spawnAccum = 0;
-  private color = "#ff6622";
+  private spawnCounter = 0;
+  private colors: string[] = ["#ff6622"];
+  private colorMode: ColorMode = "random";
   private glowRadius = 16;
   private _cells: EffectCell[] = [];
 
@@ -27,10 +32,12 @@ export class FireEffect implements AsciiEffect {
     this.intensity = (params.intensity as number) ?? 0.5;
     this.height = (params.height as number) ?? 0.3;
     this.spread = (params.spread as number) ?? 1.5;
-    this.color = (params.color as string) ?? "#ff6622";
+    this.colors = readColors(params, "#ff6622");
+    this.colorMode = readColorMode(params);
     this.glowRadius = (params.glowRadius as number) ?? 16;
     this.embers = [];
     this.spawnAccum = 0;
+    this.spawnCounter = 0;
   }
 
   update(dt: number, _time: number, _mask: MaskGrid): EffectCell[] {
@@ -43,13 +50,19 @@ export class FireEffect implements AsciiEffect {
     const spawnCount = Math.floor(this.spawnAccum);
     this.spawnAccum -= spawnCount;
     for (let i = 0; i < spawnCount; i++) {
+      const idx = this.colorMode === "random"
+        ? Math.floor(Math.random() * this.colors.length)
+        : this.spawnCounter;
       this.embers.push({
         col: Math.random() * cols,
         y: baseRow + Math.random(),
         speed: 5 + Math.random() * 10,
         life: 0,
         maxLife: 0.5 + Math.random() * 1.5 * this.height,
+        color: pickColor(this.colors, this.colorMode === "gradient" ? "random" : this.colorMode, idx),
+        colorIdx: idx,
       });
+      this.spawnCounter++;
     }
 
     for (let i = this.embers.length - 1; i >= 0; i--) {
@@ -72,7 +85,11 @@ export class FireEffect implements AsciiEffect {
       const r = Math.round(e.y);
       const c = Math.round(e.col);
       if (r >= 0 && r < rows && c >= 0 && c < cols) {
-        cells.push({ row: r, col: c, char: ch, brightness: 1 - t, color: this.color, glowRadius: this.glowRadius });
+        // For gradient mode, use lifecycle position
+        const color = this.colorMode === "gradient"
+          ? pickColor(this.colors, this.colorMode, e.colorIdx, t)
+          : e.color;
+        cells.push({ row: r, col: c, char: ch, brightness: 1 - t, color, glowRadius: this.glowRadius });
       }
     }
 
@@ -84,7 +101,7 @@ export class FireEffect implements AsciiEffect {
       { key: "intensity", label: "Intensity", type: "slider", min: 0.1, max: 1, step: 0.05, defaultValue: 0.5 },
       { key: "height", label: "Height", type: "slider", min: 0.1, max: 1, step: 0.05, defaultValue: 0.3 },
       { key: "spread", label: "Spread", type: "slider", min: 0, max: 5, step: 0.5, defaultValue: 1.5 },
-      { key: "color", label: "Color", type: "color", defaultValue: "#ff6622" },
+      ...colorControls("#ff6622"),
       { key: "glowRadius", label: "Glow radius", type: "slider", min: 0, max: 40, step: 1, defaultValue: 16 },
     ];
   }

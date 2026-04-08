@@ -38,7 +38,7 @@ export interface EffectConfig {
   timeline: {
     start: number;
     end: number | null;
-    loop: boolean;
+    mode: "continuous" | "one-shot";
   };
   applyToAscii: boolean;
 }
@@ -50,7 +50,7 @@ export function createDefaultScene(): SceneData {
     ascii: {
       ramp: " .`,:;cbaO0%#@",
       fontSize: "0.85vw",
-      fontFamily: "SFMono-Regular, Consolas, 'Liberation Mono', monospace",
+      fontFamily: "'JetBrains Mono', SFMono-Regular, Consolas, monospace",
       lineHeight: 0.78,
       letterSpacing: "0.06em",
       blendMode: "screen",

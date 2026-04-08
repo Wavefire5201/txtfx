@@ -67,6 +67,16 @@ interface EditorState {
   expandedEffects: Set<string>;
   toggleExpandEffect: (id: string) => void;
 
+  // Panel collapse
+  leftPanelCollapsed: boolean;
+  rightPanelCollapsed: boolean;
+  toggleLeftPanel: () => void;
+  toggleRightPanel: () => void;
+
+  // Timeline collapse
+  timelineCollapsed: boolean;
+  toggleTimeline: () => void;
+
   // Undo/Redo
   undo: () => void;
   redo: () => void;
@@ -92,7 +102,20 @@ function pushHistory(scene: SceneData) {
 
 export const useEditorStore = create<EditorState>((set) => ({
   scene: createDefaultScene(),
-  setScene: (scene) => set({ scene }),
+  setScene: (scene) => {
+    // Migrate legacy loop -> mode on effects
+    const migrated = {
+      ...scene,
+      effects: scene.effects.map((fx) => {
+        const tl = fx.timeline as any;
+        if (tl.mode === undefined && tl.loop !== undefined) {
+          return { ...fx, timeline: { start: tl.start, end: tl.end, mode: tl.loop ? "continuous" as const : "one-shot" as const } };
+        }
+        return fx;
+      }),
+    };
+    set({ scene: migrated });
+  },
   updateAscii: (updates) =>
     set((s) => ({ scene: { ...s.scene, ascii: { ...s.scene.ascii, ...updates } } })),
   updatePlayback: (updates) =>
@@ -110,7 +133,7 @@ export const useEditorStore = create<EditorState>((set) => ({
         enabled: true,
         maskRegion: "background" as MaskRegion,
         params: {},
-        timeline: { start: 0, end: null, loop: true },
+        timeline: { start: 0, end: null, mode: "continuous" as const },
         applyToAscii: false,
       };
       const expanded = new Set(s.expandedEffects);
@@ -177,7 +200,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   setPlaying: (playing) => set({ playing }),
   setCurrentTime: (time) => set({ currentTime: time }),
 
-  showMask: false,
+  showMask: true,
   showAscii: true,
   showEffects: true,
   showImage: true,
@@ -204,6 +227,14 @@ export const useEditorStore = create<EditorState>((set) => ({
       else expanded.add(id);
       return { expandedEffects: expanded };
     }),
+
+  leftPanelCollapsed: false,
+  rightPanelCollapsed: false,
+  toggleLeftPanel: () => set((s) => ({ leftPanelCollapsed: !s.leftPanelCollapsed })),
+  toggleRightPanel: () => set((s) => ({ rightPanelCollapsed: !s.rightPanelCollapsed })),
+
+  timelineCollapsed: false,
+  toggleTimeline: () => set((s) => ({ timelineCollapsed: !s.timelineCollapsed })),
 
   canUndo: false,
   canRedo: false,

@@ -1,4 +1,5 @@
 import type { AsciiEffect, GridInfo, MaskGrid, EffectCell, ControlDescriptor } from "./types";
+import { type ColorMode, pickColor, readColors, readColorMode, colorControls } from "./color-util";
 
 interface Particle {
   c: number;
@@ -9,6 +10,7 @@ interface Particle {
   maxLife: number;
   char: string;
   type: "main" | "flash" | "spark";
+  color: string;
 }
 
 interface Burst {
@@ -25,8 +27,10 @@ export class FireworkEffect implements AsciiEffect {
   private intervalMax = 5;
   private particleCount = 50;
   private maxRadius = 20;
-  private color = "#ffcc00";
+  private colors: string[] = ["#ffcc00"];
+  private colorMode: ColorMode = "random";
   private glowRadius = 18;
+  private spawnCounter = 0;
   private _cells: EffectCell[] = [];
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
@@ -35,9 +39,11 @@ export class FireworkEffect implements AsciiEffect {
     this.intervalMax = (params.intervalMax as number) ?? 5;
     this.particleCount = (params.particleCount as number) ?? 50;
     this.maxRadius = (params.maxRadius as number) ?? 20;
-    this.color = (params.color as string) ?? "#ffcc00";
+    this.colors = readColors(params, "#ffcc00");
+    this.colorMode = readColorMode(params);
     this.glowRadius = (params.glowRadius as number) ?? 18;
     this.bursts = [];
+    this.spawnCounter = 0;
     this.nextSpawn = this.intervalMin + Math.random() * (this.intervalMax - this.intervalMin);
   }
 
@@ -70,7 +76,11 @@ export class FireworkEffect implements AsciiEffect {
         const c = Math.round(p.c);
         if (r >= 0 && r < rows && c >= 0 && c < cols) {
           const ch = t < 0.3 ? p.char : t < 0.6 ? "+" : ".";
-          cells.push({ row: r, col: c, char: ch, brightness, color: this.color, glowRadius: this.glowRadius });
+          // For gradient mode, use lifecycle position
+          const color = this.colorMode === "gradient"
+            ? pickColor(this.colors, this.colorMode, 0, t)
+            : p.color;
+          cells.push({ row: r, col: c, char: ch, brightness, color, glowRadius: this.glowRadius });
         }
       }
 
@@ -88,11 +98,21 @@ export class FireworkEffect implements AsciiEffect {
     const cy = rows > 12 ? 6 + Math.random() * (rows - 12) : rows / 2;
     const particles: Particle[] = [];
 
+    // Pick a burst color (random per burst or per particle)
+    const burstIdx = this.colorMode === "random"
+      ? Math.floor(Math.random() * this.colors.length)
+      : this.spawnCounter;
+    const burstColor = pickColor(this.colors, this.colorMode === "gradient" ? "random" : this.colorMode, burstIdx);
+    this.spawnCounter++;
+
     // Main radial particles
     for (let i = 0; i < this.particleCount; i++) {
       const angle = (Math.PI * 2 * i) / this.particleCount + (Math.random() - 0.5);
       const dist = 0.4 + Math.random() * 0.6;
       const speed = this.maxRadius * dist;
+      const idx = this.colorMode === "random"
+        ? Math.floor(Math.random() * this.colors.length)
+        : this.spawnCounter + i;
       particles.push({
         c: cx, r: cy,
         vc: Math.cos(angle) * speed,
@@ -101,6 +121,7 @@ export class FireworkEffect implements AsciiEffect {
         maxLife: 0.7 + Math.random() * 1,
         char: "@",
         type: "main",
+        color: pickColor(this.colors, this.colorMode === "gradient" ? "random" : this.colorMode, idx),
       });
     }
 
@@ -116,6 +137,7 @@ export class FireworkEffect implements AsciiEffect {
         maxLife: 0.2 + Math.random() * 0.3,
         char: "*",
         type: "flash",
+        color: burstColor,
       });
     }
 
@@ -132,6 +154,7 @@ export class FireworkEffect implements AsciiEffect {
         maxLife: 0.8 + Math.random() * 1.2,
         char: ".",
         type: "spark",
+        color: burstColor,
       });
     }
 
@@ -144,7 +167,7 @@ export class FireworkEffect implements AsciiEffect {
       { key: "intervalMax", label: "Max interval (s)", type: "slider", min: 2, max: 20, step: 0.5, defaultValue: 5 },
       { key: "particleCount", label: "Particles", type: "slider", min: 20, max: 100, step: 5, defaultValue: 50 },
       { key: "maxRadius", label: "Radius", type: "slider", min: 8, max: 40, step: 2, defaultValue: 20 },
-      { key: "color", label: "Color", type: "color", defaultValue: "#ffcc00" },
+      ...colorControls("#ffcc00"),
       { key: "glowRadius", label: "Glow radius", type: "slider", min: 0, max: 40, step: 1, defaultValue: 18 },
     ];
   }

@@ -6,6 +6,7 @@ import { PropertiesPanel } from "@/components/editor/PropertiesPanel";
 import { Timeline } from "@/components/editor/Timeline";
 import { ToastContainer } from "@/components/editor/Toast";
 import { KeyboardShortcuts } from "@/components/editor/KeyboardShortcuts";
+import { EditorLayout } from "@/components/editor/EditorLayout";
 
 export const metadata = {
   title: "txtfx - editor",
@@ -13,7 +14,7 @@ export const metadata = {
 
 export default function EditorPage() {
   return (
-    <div className="editor">
+    <EditorLayout>
       <Toolbar />
       <ToolPanel />
       <Canvas />
@@ -21,6 +22,6 @@ export default function EditorPage() {
       <Timeline />
       <ToastContainer />
       <KeyboardShortcuts />
-    </div>
+    </EditorLayout>
   );
 }

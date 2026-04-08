@@ -223,7 +223,7 @@ export function Toolbar() {
                 <FileArrowDown size={14} />
                 <span>Scene JSON (.txtfx)</span>
               </button>
-              <button className="toolbar-dropdown-item" onClick={handleExportHTML}>
+              <button className="toolbar-dropdown-item" onClick={handleExportHTML} disabled title="Coming soon — export engine being rebuilt">
                 <FileHtml size={14} />
                 <span>Standalone HTML</span>
               </button>
