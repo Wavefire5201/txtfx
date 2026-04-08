@@ -20,17 +20,24 @@
 }
 
 html.light-mode {
-  --bg: #f5f5f7;
-  --bg-dark: #e8e8ec;
-  --bg-panel: #ffffff;
-  --bg-toolbar: #f0f0f4;
-  --border: rgba(0, 0, 0, 0.12);
-  --border-active: rgba(0, 0, 0, 0.2);
-  --text: #1a1a2e;
-  --text-bright: #000000;
-  --text-dim: #666680;
-  --text-muted: #999aaa;
-  --accent: #2d8a56;
+  --bg-base: #eeeef2;
+  --bg-panel: #f8f8fa;
+  --bg-toolbar: #ffffff;
+  --bg-input: #e8e8ee;
+  --bg-card: #f0f0f5;
+  --border: rgba(0, 0, 0, 0.10);
+  --border-active: rgba(0, 0, 0, 0.18);
+  --text: #2c2c3a;
+  --text-bright: #111118;
+  --text-dim: #6b6b80;
+  --text-muted: #8e8ea0;
+  --accent: #1a9a52;
+  --accent-bg: #d4f0e0;
+  --accent-dim: #e6f7ed;
+  --danger: #d94444;
+  --danger-bg: #fde8e8;
+  --radius: 6px;
+  --radius-lg: 8px;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -562,11 +569,11 @@ body {
 }
 
 .layer-item:hover {
-  background: #252530;
+  background: var(--bg-card);
 }
 
 .layer-item--active {
-  background: #252530;
+  background: var(--bg-card);
   border-color: var(--border-active);
 }
 
@@ -906,7 +913,7 @@ body {
   color: var(--text);
 }
 
-.tool-btn:hover { border-color: var(--text-muted); background: #2a2a34; }
+.tool-btn:hover { border-color: var(--text-muted); background: var(--bg-card); }
 .tool-btn--active { border-color: var(--accent); background: var(--accent-dim); color: var(--accent); }
 
 .tool-shortcut {
@@ -1169,10 +1176,11 @@ body {
   z-index: 10;
   padding: 4px 10px;
   border-radius: 6px;
-  background: rgba(0, 0, 0, 0.65);
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
   backdrop-filter: blur(6px);
   font: 11px/1.4 SFMono-Regular, Consolas, monospace;
-  color: rgba(140, 255, 180, 0.9);
+  color: var(--accent);
   pointer-events: none;
   white-space: nowrap;
 }
@@ -1181,7 +1189,7 @@ body {
 .confirm-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.4);
   backdrop-filter: blur(4px);
   z-index: 100;
   animation: fade-in 0.15s ease;

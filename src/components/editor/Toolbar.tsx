@@ -146,18 +146,26 @@ export function Toolbar() {
     setExporting(false);
   }
 
-  function handleShare() {
-    const shareScene = { ...getExportScene(), image: { ...getExportScene().image, data: "" } };
-    const json = JSON.stringify(shareScene);
-    const encoded = btoa(unescape(encodeURIComponent(json)));
-    const url = `${window.location.origin}/editor#scene=${encoded}`;
-    navigator.clipboard.writeText(url).then(() => {
+  async function handleShare() {
+    try {
+      const scene = getExportScene();
+      const res = await fetch("/api/scenes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ scene }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        toast(err.error || "Failed to create share link", "warning");
+        return;
+      }
+      const { id } = await res.json();
+      const url = `${window.location.origin}/s/${id}`;
+      await navigator.clipboard.writeText(url);
       toast("Share link copied to clipboard");
-    }).catch(() => {
-      const blob = new Blob([JSON.stringify(getExportScene(), null, 2)], { type: "application/json" });
-      downloadBlob(blob, `txtfx-${new Date().toISOString().slice(0, 10)}.txtfx`);
-      toast("Share link failed — scene file downloaded instead");
-    });
+    } catch {
+      toast("Failed to create share link", "warning");
+    }
   }
 
   return (

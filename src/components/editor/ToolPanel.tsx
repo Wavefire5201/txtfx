@@ -6,7 +6,6 @@ import { useEditorStore } from "@/lib/store";
 import {
   PaintBrush,
   MagicWand,
-  Selection,
   Hand,
   Eye,
   EyeSlash,
@@ -33,7 +32,6 @@ export function ToolPanel() {
   const tools = [
     { id: "brush-fg" as const, icon: <PaintBrush size={16} />, title: "Foreground brush (B)", shortcut: "B" },
     { id: "brush-bg" as const, icon: <MagicWand size={16} />, title: "Background brush (N)", shortcut: "N" },
-    { id: "select" as const, icon: <Selection size={16} />, title: "Select (S)", shortcut: "S" },
     { id: "pan" as const, icon: <Hand size={16} />, title: "Pan (V)", shortcut: "V" },
   ];
 

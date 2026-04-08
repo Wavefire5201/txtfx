@@ -5,7 +5,7 @@ import { type SceneData, type EffectConfig, createDefaultScene } from "@/engine/
 import type { EffectType, MaskRegion } from "@/engine/effects/types";
 import { Mask } from "@/engine/mask";
 
-type Tool = "brush-fg" | "brush-bg" | "pan" | "select";
+type Tool = "brush-fg" | "brush-bg" | "pan";
 
 interface EditorState {
   // Scene

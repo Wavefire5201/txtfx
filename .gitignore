@@ -40,6 +40,13 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# drizzle
+drizzle/
+
+# bundled player (build artifacts)
+src/engine/export/player.min.js
+src/engine/export/player-bundle.ts
+
 # omc state
 .omc/
 .gstack/

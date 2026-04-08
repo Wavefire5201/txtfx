@@ -72,6 +72,25 @@ export function Canvas() {
 
   // Restore auto-saved scene on mount
   useEffect(() => {
+    // Check for shared scene by ID
+    try {
+      const hash = window.location.hash;
+      if (hash.startsWith("#shared=")) {
+        const id = hash.slice(8);
+        window.history.replaceState(null, "", window.location.pathname);
+        fetch(`/api/scenes/${id}`)
+          .then(r => r.json())
+          .then(data => {
+            if (data.scene) {
+              useEditorStore.getState().setScene(data.scene);
+              if (data.scene.image?.data) useEditorStore.getState().setImageUrl(data.scene.image.data);
+            }
+          })
+          .catch(() => { /* failed to load shared scene */ });
+        return;
+      }
+    } catch { /* ignore */ }
+
     // Check for shared scene in URL hash
     try {
       const hash = window.location.hash;
@@ -744,6 +763,9 @@ export function Canvas() {
           <button className="zoom-btn" onClick={() => setZoom(zoom - 0.25)} title="Zoom out">−</button>
           <span>{Math.round(zoom * 100)}%</span>
           <button className="zoom-btn" onClick={() => setZoom(zoom + 0.25)} title="Zoom in">+</button>
+          {(zoom !== 1 || panX !== 0 || panY !== 0) && (
+            <button className="zoom-btn" onClick={() => { setZoom(1); setPan(0, 0); }} title="Reset view">⟲</button>
+          )}
           <span className="viewport-info-sep">|</span>
           <span>{imgSize.w} x {imgSize.h}</span>
           <span className="viewport-info-sep">|</span>

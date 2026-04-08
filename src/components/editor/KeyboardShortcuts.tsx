@@ -37,9 +37,6 @@ export function KeyboardShortcuts() {
         case "KeyV":
           store.setActiveTool("pan");
           break;
-        case "KeyS":
-          store.setActiveTool("select");
-          break;
         case "KeyM":
           store.toggleLayer("mask");
           break;
