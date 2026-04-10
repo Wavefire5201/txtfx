@@ -33,21 +33,29 @@ export class MatrixEffect implements AsciiEffect {
   private _cells: EffectCell[] = [];
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
-    this.grid = grid;
-    this.density = (params.density as number) ?? 0.4;
+    const newDensity = (params.density as number) ?? 0.4;
+    const needsRegen = this.columns.length === 0
+      || newDensity !== this.density
+      || grid.cols !== this.grid.cols
+      || grid.rows !== this.grid.rows;
+
+    this.density = newDensity;
     this.speedMin = (params.speedMin as number) ?? 5;
     this.speedMax = (params.speedMax as number) ?? 14;
     this.colors = readColors(params, "#00ff41");
     this.colorMode = readColorMode(params);
     this.glowRadius = (params.glowRadius as number) ?? 10;
+    this.grid = grid;
 
-    // Create one column entry per grid column, but only some are active
-    const { cols, rows } = grid;
-    this.columns = [];
-    this.spawnCounter = 0;
-    for (let c = 0; c < cols; c++) {
-      if (Math.random() > this.density) continue;
-      this.columns.push(this.makeColumn(rows, cols));
+    if (needsRegen) {
+      // Create one column entry per grid column, but only some are active
+      const { cols, rows } = grid;
+      this.columns = [];
+      this.spawnCounter = 0;
+      for (let c = 0; c < cols; c++) {
+        if (Math.random() > this.density) continue;
+        this.columns.push(this.makeColumn(rows, cols));
+      }
     }
   }
 

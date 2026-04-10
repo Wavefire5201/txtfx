@@ -25,7 +25,10 @@ export class RainEffect implements AsciiEffect {
   private _cells: EffectCell[] = [];
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
-    this.grid = grid;
+    const needsRegen = this.drops.length === 0
+      || grid.cols !== this.grid.cols
+      || grid.rows !== this.grid.rows;
+
     this.density = (params.density as number) ?? 0.3;
     this.speedMin = (params.speedMin as number) ?? 15;
     this.speedMax = (params.speedMax as number) ?? 35;
@@ -33,9 +36,13 @@ export class RainEffect implements AsciiEffect {
     this.colors = readColors(params, "#88bbee");
     this.colorMode = readColorMode(params);
     this.glowRadius = (params.glowRadius as number) ?? 10;
-    this.drops = [];
-    this.spawnAccum = 0;
-    this.spawnCounter = 0;
+    this.grid = grid;
+
+    if (needsRegen) {
+      this.drops = [];
+      this.spawnAccum = 0;
+      this.spawnCounter = 0;
+    }
   }
 
   update(dt: number, _time: number, _mask: MaskGrid): EffectCell[] {

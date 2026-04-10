@@ -22,6 +22,7 @@
 - [ ] GIF export (record animation frames → encode as GIF)
 - [ ] MP4/WebM video export (MediaRecorder API on canvas)
 - [ ] npm package `txtfx-player` for embedding scenes in any website
+- [ ] Rebuild HTML/embed export pipeline to bundle fonts, multi-color support, and new features
 
 ### Editor Tools
 - [ ] Image filters (brightness, contrast, saturation) before ASCII conversion
@@ -97,9 +98,11 @@
 ---
 
 ## Technical Debt / Architecture
+- [ ] Migrate editor.css to hybrid Tailwind — keep CSS variables + grid layout in a slim CSS file, move component-level styles (buttons, panels, inputs, spacing) to Tailwind utility classes in JSX
 - [ ] Mask coordinate alignment (center-crop mismatch between ASCII and mask)
 - [ ] Export masking support in HTML runtime
 - [ ] Object pooling for EffectCell (eliminate remaining per-frame allocations)
-- [ ] WebGL renderer option for high-performance glow
+- [ ] WebGL renderer — full GPU-accelerated pipeline (font atlas + instanced quads + fragment shader glow). Path to 120fps+. Replace DOM text + Canvas 2D hybrid with single WebGL context. SDF text for crisp scaling.
+- [ ] OffscreenCanvas + Web Worker for glow rendering (off main thread)
 - [ ] Web Worker for effect computation (off main thread)
 - [ ] Service Worker for offline support

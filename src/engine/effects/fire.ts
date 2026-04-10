@@ -28,16 +28,23 @@ export class FireEffect implements AsciiEffect {
   private _cells: EffectCell[] = [];
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
-    this.grid = grid;
+    const needsRegen = this.embers.length === 0
+      || grid.cols !== this.grid.cols
+      || grid.rows !== this.grid.rows;
+
     this.intensity = (params.intensity as number) ?? 0.5;
     this.height = (params.height as number) ?? 0.3;
     this.spread = (params.spread as number) ?? 1.5;
     this.colors = readColors(params, "#ff6622");
     this.colorMode = readColorMode(params);
     this.glowRadius = (params.glowRadius as number) ?? 16;
-    this.embers = [];
-    this.spawnAccum = 0;
-    this.spawnCounter = 0;
+    this.grid = grid;
+
+    if (needsRegen) {
+      this.embers = [];
+      this.spawnAccum = 0;
+      this.spawnCounter = 0;
+    }
   }
 
   update(dt: number, _time: number, _mask: MaskGrid): EffectCell[] {

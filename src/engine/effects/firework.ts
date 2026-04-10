@@ -34,7 +34,10 @@ export class FireworkEffect implements AsciiEffect {
   private _cells: EffectCell[] = [];
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
-    this.grid = grid;
+    const needsRegen = this.grid.cols === 0
+      || grid.cols !== this.grid.cols
+      || grid.rows !== this.grid.rows;
+
     this.intervalMin = (params.intervalMin as number) ?? 3;
     this.intervalMax = (params.intervalMax as number) ?? 5;
     this.particleCount = (params.particleCount as number) ?? 50;
@@ -42,9 +45,13 @@ export class FireworkEffect implements AsciiEffect {
     this.colors = readColors(params, "#ffcc00");
     this.colorMode = readColorMode(params);
     this.glowRadius = (params.glowRadius as number) ?? 18;
-    this.bursts = [];
-    this.spawnCounter = 0;
-    this.nextSpawn = this.intervalMin + Math.random() * (this.intervalMax - this.intervalMin);
+    this.grid = grid;
+
+    if (needsRegen) {
+      this.bursts = [];
+      this.spawnCounter = 0;
+      this.nextSpawn = this.intervalMin + Math.random() * (this.intervalMax - this.intervalMin);
+    }
   }
 
   update(dt: number, time: number, _mask: MaskGrid): EffectCell[] {

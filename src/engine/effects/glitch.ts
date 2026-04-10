@@ -27,15 +27,22 @@ export class GlitchEffect implements AsciiEffect {
   private _cells: EffectCell[] = [];
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
+    const needsRegen = this.blocks.length === 0
+      || grid.cols !== this.grid.cols
+      || grid.rows !== this.grid.rows;
+
     this.grid = grid;
     this.frequency = (params.frequency as number) ?? 0.5;
     this.blockSize = (params.blockSize as number) ?? 8;
     this.intensity = (params.intensity as number) ?? 0.6;
     this.colors = readColors(params, "#ff3366");
     this.colorMode = readColorMode(params);
-    this.blocks = [];
-    this.nextSpawn = 0;
-    this.spawnCounter = 0;
+
+    if (needsRegen) {
+      this.blocks = [];
+      this.nextSpawn = 0;
+      this.spawnCounter = 0;
+    }
   }
 
   update(dt: number, time: number, _mask: MaskGrid): EffectCell[] {

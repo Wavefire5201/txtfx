@@ -26,6 +26,10 @@ export function KeyboardShortcuts() {
       switch (e.code) {
         case "Space":
           e.preventDefault();
+          // If at the end, restart from beginning
+          if (!store.playing && store.currentTime >= store.scene.playback.duration - 0.05) {
+            store.setCurrentTime(0);
+          }
           store.setPlaying(!store.playing);
           break;
         case "KeyB":
@@ -47,6 +51,7 @@ export function KeyboardShortcuts() {
           store.setBrushSize(Math.min(100, store.brushSize + 4));
           break;
         case "Home":
+          store.setPlaying(false);
           store.setCurrentTime(0);
           break;
         case "End":

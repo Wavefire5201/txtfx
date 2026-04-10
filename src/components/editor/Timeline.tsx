@@ -1,7 +1,7 @@
 "use client";
 
 import { useRef, useCallback, useState, useEffect } from "react";
-import { useEditorStore } from "@/lib/store";
+import { useEditorStore, animationTime } from "@/lib/store";
 import { EFFECT_LABELS } from "@/engine/effects";
 import { SkipBack, Play, Pause, SkipForward, CaretUp, CaretDown } from "@phosphor-icons/react";
 
@@ -16,6 +16,8 @@ export function Timeline() {
   const timelineCollapsed = useEditorStore((s) => s.timelineCollapsed);
   const toggleTimeline = useEditorStore((s) => s.toggleTimeline);
   const rulerRef = useRef<HTMLDivElement>(null);
+  const playheadRef = useRef<HTMLDivElement>(null);
+  const timeDisplayRef = useRef<HTMLSpanElement>(null);
   const [dragging, setDragging] = useState<{ id: string; edge: "start" | "end" | "move"; startX: number; origStart: number; origEnd: number | null } | null>(null);
 
   function formatTime(t: number): string {
@@ -27,6 +29,27 @@ export function Timeline() {
   const duration = scene.playback.duration;
   const ticks = Array.from({ length: Math.ceil(duration / 2) + 1 }, (_, i) => i * 2);
   const playheadPercent = duration > 0 ? (currentTime / duration) * 100 : 0;
+
+  // Smooth playhead: update DOM directly via rAF while playing, bypassing React renders
+  useEffect(() => {
+    if (!playing) return;
+    let raf = 0;
+    function tick() {
+      const t = animationTime.current;
+      const dur = useEditorStore.getState().scene.playback.duration;
+      if (playheadRef.current && dur > 0) {
+        playheadRef.current.style.left = `${(t / dur) * 100}%`;
+      }
+      if (timeDisplayRef.current) {
+        const m = Math.floor(t / 60);
+        const s = (t % 60).toFixed(1);
+        timeDisplayRef.current.textContent = `${String(m).padStart(2, "0")}:${s.padStart(4, "0")} / ${formatTime(dur)}`;
+      }
+      raf = requestAnimationFrame(tick);
+    }
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [playing]);
 
   const seekTo = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
@@ -41,6 +64,7 @@ export function Timeline() {
   );
 
   function handleRulerMouseDown(e: React.MouseEvent<HTMLDivElement>) {
+    e.preventDefault();
     const wasPlaying = playing;
     if (wasPlaying) setPlaying(false);
     seekTo(e);
@@ -62,6 +86,7 @@ export function Timeline() {
   }
 
   function handleSkipBack() {
+    setPlaying(false);
     setCurrentTime(0);
   }
 
@@ -107,7 +132,12 @@ export function Timeline() {
         </button>
         <button
           className="timeline-btn timeline-btn-play"
-          onClick={() => setPlaying(!playing)}
+          onClick={() => {
+            if (!playing && currentTime >= duration - 0.05) {
+              setCurrentTime(0);
+            }
+            setPlaying(!playing);
+          }}
           title={playing ? "Pause" : "Play"}
           aria-label={playing ? "Pause" : "Play"}
         >
@@ -117,7 +147,7 @@ export function Timeline() {
           <SkipForward size={14} weight="fill" />
         </button>
         <span className="toolbar-sep">|</span>
-        <span className="timeline-time">
+        <span className="timeline-time" ref={timeDisplayRef}>
           {formatTime(currentTime)} / {formatTime(duration)}
         </span>
         <div className="toolbar-spacer" />
@@ -183,6 +213,7 @@ export function Timeline() {
 
           {/* Playhead */}
           <div
+            ref={playheadRef}
             className="timeline-playhead"
             style={{ left: `${playheadPercent}%` }}
           >

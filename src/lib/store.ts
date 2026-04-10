@@ -4,6 +4,7 @@ import { create } from "zustand";
 import { type SceneData, type EffectConfig, createDefaultScene } from "@/engine/scene";
 import type { EffectType, MaskRegion } from "@/engine/effects/types";
 import { Mask } from "@/engine/mask";
+import { saveState } from "@/lib/cache";
 
 type Tool = "brush-fg" | "brush-bg" | "pan";
 
@@ -99,6 +100,13 @@ function pushHistory(scene: SceneData) {
   if (_history.length > MAX_HISTORY) _history.shift();
   _historyIndex = _history.length - 1;
 }
+
+/**
+ * Lightweight animation time that updates every frame (60fps).
+ * Canvas writes this directly; Timeline reads it via rAF.
+ * Bypasses React rendering for smooth playhead updates.
+ */
+export const animationTime = { current: 0 };
 
 export const useEditorStore = create<EditorState>((set) => ({
   scene: createDefaultScene(),
@@ -271,25 +279,20 @@ useEditorStore.subscribe((state) => {
   });
 });
 
-// Auto-save to localStorage (debounced)
+// Auto-save to IndexedDB (debounced) — handles large images that exceed localStorage limits
 let saveTimeout: ReturnType<typeof setTimeout>;
 useEditorStore.subscribe((state, prevState) => {
   // Only save when scene, imageUrl, or mask changes
   if (state.scene === prevState.scene && state.imageUrl === prevState.imageUrl && state.maskVersion === prevState.maskVersion) return;
   clearTimeout(saveTimeout);
   saveTimeout = setTimeout(() => {
-    try {
-      const m = state.mask;
-      const data = {
-        scene: state.scene,
-        imageUrl: state.imageUrl,
-        maskData: m ? m.toBase64() : "",
-        maskWidth: m ? m.width : 0,
-        maskHeight: m ? m.height : 0,
-      };
-      localStorage.setItem("txtfx-autosave", JSON.stringify(data));
-    } catch {
-      // localStorage full or unavailable — ignore
-    }
+    const m = state.mask;
+    saveState({
+      scene: state.scene,
+      imageUrl: state.imageUrl,
+      maskData: m ? m.toBase64() : "",
+      maskWidth: m ? m.width : 0,
+      maskHeight: m ? m.height : 0,
+    });
   }, 1000);
 });

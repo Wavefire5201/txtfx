@@ -35,6 +35,14 @@ export class CustomEmitterEffect implements AsciiEffect {
   private _cells: EffectCell[] = [];
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
+    const newSpawnX = (params.spawnX as number) ?? 0.5;
+    const newSpawnY = (params.spawnY as number) ?? 1.0;
+    const needsRegen = this.particles.length === 0
+      || grid.cols !== this.grid.cols
+      || grid.rows !== this.grid.rows
+      || newSpawnX !== this.spawnX
+      || newSpawnY !== this.spawnY;
+
     this.grid = grid;
     this.chars = (params.chars as string) ?? "*+.";
     this.spawnRate = (params.spawnRate as number) ?? 10;
@@ -43,14 +51,17 @@ export class CustomEmitterEffect implements AsciiEffect {
     this.speed = (params.speed as number) ?? 10;
     this.gravity = (params.gravity as number) ?? 0;
     this.lifetime = (params.lifetime as number) ?? 2;
-    this.spawnX = (params.spawnX as number) ?? 0.5;
-    this.spawnY = (params.spawnY as number) ?? 1.0;
+    this.spawnX = newSpawnX;
+    this.spawnY = newSpawnY;
     this.colors = readColors(params, "#ffffff");
     this.colorMode = readColorMode(params);
     this.glowRadius = (params.glowRadius as number) ?? 14;
-    this.particles = [];
-    this.spawnAccum = 0;
-    this.spawnCounter = 0;
+
+    if (needsRegen) {
+      this.particles = [];
+      this.spawnAccum = 0;
+      this.spawnCounter = 0;
+    }
   }
 
   update(dt: number, _time: number, _mask: MaskGrid): EffectCell[] {

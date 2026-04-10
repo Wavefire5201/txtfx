@@ -25,8 +25,14 @@ export class TwinkleEffect implements AsciiEffect {
   private _cells: EffectCell[] = [];
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
+    const newCount = (params.count as number) ?? 50;
+    const needsRegen = this.stars.length === 0
+      || newCount !== this.count
+      || grid.cols !== this.grid.cols
+      || grid.rows !== this.grid.rows;
+
     this.grid = grid;
-    this.count = (params.count as number) ?? 50;
+    this.count = newCount;
     this.speedMin = (params.speedMin as number) ?? 0.5;
     this.speedMax = (params.speedMax as number) ?? 2.3;
     this.bigChance = (params.bigChance as number) ?? 0.35;
@@ -34,20 +40,29 @@ export class TwinkleEffect implements AsciiEffect {
     this.colorMode = readColorMode(params);
     this.glowRadius = (params.glowRadius as number) ?? 18;
 
-    this.stars = Array.from({ length: this.count }, (_, i) => {
-      const colorIdx = this.colorMode === "random"
-        ? Math.floor(Math.random() * this.colors.length)
-        : i;
-      return {
-        c: Math.floor(Math.random() * grid.cols),
-        r: Math.floor(Math.random() * grid.rows),
-        phase: Math.random() * Math.PI * 2,
-        speed: this.speedMin + Math.random() * (this.speedMax - this.speedMin),
-        big: Math.random() < this.bigChance,
-        color: pickColor(this.colors, this.colorMode, colorIdx),
-        colorIdx,
-      };
-    });
+    if (needsRegen) {
+      // Structural change — regenerate all stars
+      this.stars = Array.from({ length: this.count }, (_, i) => {
+        const colorIdx = this.colorMode === "random"
+          ? Math.floor(Math.random() * this.colors.length)
+          : i;
+        return {
+          c: Math.floor(Math.random() * grid.cols),
+          r: Math.floor(Math.random() * grid.rows),
+          phase: Math.random() * Math.PI * 2,
+          speed: this.speedMin + Math.random() * (this.speedMax - this.speedMin),
+          big: Math.random() < this.bigChance,
+          color: pickColor(this.colors, this.colorMode, colorIdx),
+          colorIdx,
+        };
+      });
+    } else {
+      // Visual change only — update colors in place, preserve positions/phases/big
+      for (let i = 0; i < this.stars.length; i++) {
+        const s = this.stars[i];
+        s.color = pickColor(this.colors, this.colorMode, s.colorIdx);
+      }
+    }
   }
 
   update(_dt: number, time: number, _mask: MaskGrid): EffectCell[] {

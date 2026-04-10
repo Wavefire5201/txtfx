@@ -6,6 +6,7 @@ import { exportStandaloneHTML } from "@/engine/export/html";
 import { exportEmbedSnippet } from "@/engine/export/embed";
 import { type SceneData, createDefaultScene } from "@/engine/scene";
 import { Mask } from "@/engine/mask";
+import { clearState } from "@/lib/cache";
 import { toast } from "./Toast";
 import { ConfirmDialog } from "./ConfirmDialog";
 import {
@@ -111,7 +112,12 @@ export function Toolbar() {
   function handleReset() {
     setScene(createDefaultScene());
     setImageUrl("");
-    localStorage.removeItem("txtfx-autosave");
+    clearState();
+    const store = useEditorStore.getState();
+    store.setZoom(1);
+    store.setPan(0, 0);
+    store.setPlaying(false);
+    store.setCurrentTime(0);
     toast("Canvas reset");
   }
 

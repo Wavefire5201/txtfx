@@ -275,8 +275,7 @@ body {
 
 .viewport-canvas .hero-bg,
 .viewport-canvas .hero-vignette,
-.viewport-canvas .ascii-overlay,
-.viewport-canvas .ascii-sparkle {
+.viewport-canvas .ascii-overlay {
   position: absolute;
   inset: 0;
 }
@@ -287,8 +286,7 @@ body {
   transform: scale(1.03);
 }
 
-.viewport-canvas .ascii-overlay,
-.viewport-canvas .ascii-sparkle {
+.viewport-canvas .ascii-overlay {
   margin: 0;
   padding: 10px 8px 8px;
   overflow: hidden;
@@ -297,6 +295,7 @@ body {
   pointer-events: none;
   font-family: var(--font-mono), 'JetBrains Mono', SFMono-Regular, Consolas, monospace;
   font-weight: 700;
+  font-variant-ligatures: none;
   mix-blend-mode: screen;
 }
 
@@ -305,10 +304,6 @@ body {
   text-shadow:
     0 0 8px rgba(255, 255, 255, 0.04),
     0 0 16px rgba(140, 180, 255, 0.03);
-}
-
-.viewport-canvas .ascii-sparkle {
-  color: rgba(255, 250, 240, 0.95);
 }
 
 /* Drop overlay */
@@ -902,11 +897,11 @@ body {
   justify-content: center;
   gap: 6px;
   width: 100%;
-  padding: 10px;
-  background: var(--accent-bg);
-  border: 1px solid var(--accent);
+  padding: 8px;
+  background: transparent;
+  border: 1px dashed var(--border-active);
   border-radius: var(--radius);
-  color: var(--accent);
+  color: var(--text-dim);
   font-size: 11px;
   font-weight: 500;
   cursor: pointer;
@@ -914,8 +909,9 @@ body {
 }
 
 .add-effect-btn:hover {
-  background: var(--accent);
-  color: var(--bg-base);
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-dim);
 }
 
 .add-effect-menu {
@@ -1244,19 +1240,17 @@ body {
 
 /* Performance overlay */
 .perf-overlay {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 10;
-  padding: 4px 10px;
-  border-radius: 6px;
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  backdrop-filter: blur(6px);
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 12px 0 10px;
   font: 11px/1.4 SFMono-Regular, Consolas, monospace;
   color: var(--accent);
   pointer-events: none;
   white-space: nowrap;
+  opacity: 1;
+  transform: translateX(0);
+  transition: opacity 120ms ease, transform 160ms cubic-bezier(0.2, 0.9, 0.25, 1);
 }
 
 /* ---- Confirm Dialog ---- */
@@ -1427,47 +1421,118 @@ body {
   justify-content: center;
 }
 
-/* ---- Perf overlay wrap ---- */
-.perf-overlay-wrap {
+/* ---- Perf HUD ---- */
+.perf-hud-wrap {
+  --perf-control-size: 30px;
   position: absolute;
   top: 8px;
   right: 8px;
   z-index: 10;
   display: flex;
-  align-items: center;
-  gap: 4px;
+  pointer-events: none;
 }
 
-.perf-overlay {
-  position: static;
-  top: unset;
-  right: unset;
-  z-index: unset;
+.perf-hud {
+  min-height: var(--perf-control-size);
+  display: inline-flex;
+  align-items: center;
+  pointer-events: auto;
+  box-sizing: border-box;
+}
+
+.perf-panel-clip {
+  min-width: 0;
+  max-width: 32rem;
+  overflow: hidden;
+  display: flex;
+  align-items: stretch;
+  transition: max-width 180ms cubic-bezier(0.2, 0.9, 0.25, 1);
+}
+
+.perf-hud[data-open="false"] .perf-panel-clip {
+  max-width: 0;
+}
+
+.perf-hud[data-open="false"] .perf-overlay {
+  opacity: 0;
+  transform: translateX(8px);
 }
 
 .perf-toggle-btn {
-  background: var(--bg-panel);
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  appearance: none;
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
   color: var(--text-dim);
   cursor: pointer;
-  padding: 4px 10px;
+  width: var(--perf-control-size);
+  height: var(--perf-control-size);
+  padding: 6px;
+  box-sizing: border-box;
   display: inline-flex;
+  flex: 0 0 var(--perf-control-size);
   align-items: center;
   justify-content: center;
-  transition: color 0.12s, background 0.12s;
-  backdrop-filter: blur(6px);
+  transition: color 120ms ease, background 120ms ease, transform 160ms cubic-bezier(0.2, 0.9, 0.25, 1), box-shadow 160ms ease;
   font: 11px/1.4 SFMono-Regular, Consolas, monospace;
+  line-height: 0;
 }
 
-.perf-toggle-btn:hover {
+.perf-hud--chip {
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(18, 18, 22, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  backdrop-filter: blur(12px);
+  transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+.perf-hud--chip .perf-toggle-btn {
+  width: var(--perf-control-size);
+  height: var(--perf-control-size);
+  flex-basis: var(--perf-control-size);
+  border-radius: inherit;
+  background: transparent;
+  box-shadow: none;
+}
+
+.perf-hud--chip .perf-toggle-btn:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-bright);
+}
+
+.perf-hud--chip[data-open="true"] {
+  border-color: rgba(125, 239, 160, 0.22);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(125, 239, 160, 0.05);
+}
+
+.perf-hud--chip[data-open="true"] .perf-toggle-btn {
   color: var(--accent);
-  background: var(--accent-dim);
+  background: rgba(125, 239, 160, 0.12);
+  transform: scale(1.03);
+}
+
+.perf-hud--chip .perf-overlay {
+  padding-left: 6px;
+  padding-right: 14px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .perf-panel-clip,
+  .perf-overlay {
+    transition: none;
+  }
+
+  .perf-toggle-btn,
+  .perf-hud--chip {
+    transition: none;
+  }
 }
 
 .zoom-btn {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1476,6 +1541,7 @@ body {
   background: transparent;
   color: var(--text-muted);
   font-size: 11px;
+  line-height: 1;
   cursor: pointer;
   padding: 0;
 }

@@ -20,23 +20,26 @@ export function measureGrid(container: HTMLElement): GridInfo {
   const style = getComputedStyle(container);
   const fontSize = parseFloat(style.fontSize);
   const lineHeight = parseFloat(style.lineHeight);
+  const padLeft = parseFloat(style.paddingLeft) || 0;
+  const padRight = parseFloat(style.paddingRight) || 0;
+  const padTop = parseFloat(style.paddingTop) || 0;
+  const padBottom = parseFloat(style.paddingBottom) || 0;
 
-  // Measure actual character width instead of guessing (fonts vary)
+  // Measure actual character width by appending a span INSIDE the container
+  // (inherits the exact same font context — CSS variables, inherited properties)
   const span = document.createElement("span");
-  span.style.font = style.font;
-  span.style.letterSpacing = style.letterSpacing;
   span.style.position = "absolute";
   span.style.visibility = "hidden";
   span.style.whiteSpace = "pre";
   span.textContent = "X".repeat(20);
-  document.body.appendChild(span);
+  container.appendChild(span);
   const charW = span.getBoundingClientRect().width / 20;
-  document.body.removeChild(span);
+  container.removeChild(span);
 
   const charH = lineHeight;
   const rect = container.getBoundingClientRect();
-  const cols = Math.floor((rect.width - 16) / charW);
-  const rows = Math.floor((rect.height - 18) / charH);
+  const cols = Math.floor((rect.width - padLeft - padRight) / charW);
+  const rows = Math.floor((rect.height - padTop - padBottom) / charH);
   return { cols, rows, charW, charH, fontSize };
 }
 

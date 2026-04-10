@@ -18,6 +18,8 @@ export interface GlowCell {
   color: string;
   brightness: number;
   glowRadius?: number;
+  /** true when this cell came from an applyToAscii effect (render in DOM overlay) */
+  asciiOverlay?: boolean;
 }
 
 export interface CompositeResult {
@@ -47,7 +49,7 @@ let _glowPool: GlowCell[] = [];
 let _glowCount = 0;
 
 /**
- * Composites effect cells into a sparkle overlay string.
+ * Composites effect cells into glow cells for rendering.
  * Filters cells based on mask region, resolves overlaps by brightness.
  */
 export function compositeFrame(
@@ -208,6 +210,7 @@ export function compositeFrame(
         gc.color = colorTable[ci];
         gc.brightness = brightMap[i];
         gc.glowRadius = radiusVals[i] >= 0 ? radiusVals[i] : undefined;
+        gc.asciiOverlay = asciiCodes[i] > 0;
         _glowCount++;
       }
     }

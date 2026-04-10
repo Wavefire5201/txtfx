@@ -29,7 +29,10 @@ export class SnowEffect implements AsciiEffect {
   private _cells: EffectCell[] = [];
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
-    this.grid = grid;
+    const needsRegen = this.flakes.length === 0
+      || grid.cols !== this.grid.cols
+      || grid.rows !== this.grid.rows;
+
     this.density = (params.density as number) ?? 0.15;
     this.speedMin = (params.speedMin as number) ?? 3;
     this.speedMax = (params.speedMax as number) ?? 8;
@@ -37,9 +40,13 @@ export class SnowEffect implements AsciiEffect {
     this.colors = readColors(params, "#ffffff");
     this.colorMode = readColorMode(params);
     this.glowRadius = (params.glowRadius as number) ?? 12;
-    this.flakes = [];
-    this.spawnAccum = 0;
-    this.spawnCounter = 0;
+    this.grid = grid;
+
+    if (needsRegen) {
+      this.flakes = [];
+      this.spawnAccum = 0;
+      this.spawnCounter = 0;
+    }
   }
 
   update(dt: number, time: number, _mask: MaskGrid): EffectCell[] {

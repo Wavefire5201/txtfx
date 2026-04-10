@@ -38,7 +38,10 @@ export class MeteorEffect implements AsciiEffect {
   private _cells: EffectCell[] = [];
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
-    this.grid = grid;
+    const needsRegen = this.grid.cols === 0
+      || grid.cols !== this.grid.cols
+      || grid.rows !== this.grid.rows;
+
     this.angle = (params.angle as number) ?? -75;
     this.intervalMin = (params.intervalMin as number) ?? 3;
     this.intervalMax = (params.intervalMax as number) ?? 7;
@@ -48,12 +51,15 @@ export class MeteorEffect implements AsciiEffect {
     this.colors = readColors(params, "#ffaa33");
     this.colorMode = readColorMode(params);
     this.glowRadius = (params.glowRadius as number) ?? 14;
-
     this.dc = Math.cos((this.angle * Math.PI) / 180);
     this.dr = Math.sin((-this.angle * Math.PI) / 180);
-    this.meteors = [];
-    this.nextSpawn = 1.0;
-    this.spawnCounter = 0;
+    this.grid = grid;
+
+    if (needsRegen) {
+      this.meteors = [];
+      this.nextSpawn = 1.0;
+      this.spawnCounter = 0;
+    }
   }
 
   update(dt: number, time: number, _mask: MaskGrid): EffectCell[] {
