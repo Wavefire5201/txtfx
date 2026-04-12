@@ -13,6 +13,7 @@ import {
   Eraser,
   CaretLeft,
   CaretRight,
+  ArrowCounterClockwise,
   Command,
   Control,
   ArrowFatUp,
@@ -119,7 +120,23 @@ export function ToolPanel() {
         <div className="panel-label">Mask</div>
         <div className="prop-row">
           <span className="prop-label">Brush size</span>
-          <span className="prop-value">{brushSize}px</span>
+          <span className="prop-value-group">
+            {brushSize !== 20 && (
+              <button className="prop-reset-btn" title="Reset to default" onClick={() => setBrushSize(20)}>
+                <ArrowCounterClockwise size={11} />
+              </button>
+            )}
+            <input
+              className="prop-value prop-value--input"
+              type="text"
+              inputMode="numeric"
+              value={brushSize}
+              onChange={(e) => {
+                const n = Number(e.target.value);
+                if (!Number.isNaN(n)) setBrushSize(Math.max(4, Math.min(100, Math.round(n))));
+              }}
+            />
+          </span>
         </div>
         <Slider.Root
           className="slider-root"
@@ -136,7 +153,23 @@ export function ToolPanel() {
         </Slider.Root>
         <div className="prop-row" style={{ marginTop: 8 }}>
           <span className="prop-label">Feather</span>
-          <span className="prop-value">{maskFeather}px</span>
+          <span className="prop-value-group">
+            {maskFeather !== 4 && (
+              <button className="prop-reset-btn" title="Reset to default" onClick={() => setMaskFeather(4)}>
+                <ArrowCounterClockwise size={11} />
+              </button>
+            )}
+            <input
+              className="prop-value prop-value--input"
+              type="text"
+              inputMode="numeric"
+              value={maskFeather}
+              onChange={(e) => {
+                const n = Number(e.target.value);
+                if (!Number.isNaN(n)) setMaskFeather(Math.max(0, Math.min(20, Math.round(n))));
+              }}
+            />
+          </span>
         </div>
         <Slider.Root
           className="slider-root"
@@ -204,6 +237,7 @@ export function ToolPanel() {
         <div className="panel-label">Shortcuts</div>
         <div className="shortcut-list">
           <div className="shortcut-item"><span className="kbd-group"><kbd>Space</kbd></span><span>Play / Pause</span></div>
+          <div className="shortcut-item"><span className="kbd-group"><kbd>S</kbd></span><span>Select tool</span></div>
           <div className="shortcut-item"><span className="kbd-group"><kbd>B</kbd></span><span>Foreground brush</span></div>
           <div className="shortcut-item"><span className="kbd-group"><kbd>N</kbd></span><span>Background brush</span></div>
           <div className="shortcut-item"><span className="kbd-group"><kbd>V</kbd></span><span>Pan tool</span></div>

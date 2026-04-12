@@ -52,3 +52,4 @@ src/engine/export/player-bundle.ts
 .gstack/
 .playwright-mcp/
 .source/
+package-lock.json

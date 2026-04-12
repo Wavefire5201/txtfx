@@ -803,6 +803,14 @@ export function Canvas() {
   }
 
   function handlePointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    // Update brush circle position on every move (including during paint capture)
+    const bc = brushCircleRef.current;
+    if (bc && isBrushTool) {
+      bc.style.left = `${e.clientX}px`;
+      bc.style.top = `${e.clientY}px`;
+      bc.style.display = "block";
+    }
+
     if (panStartRef.current) {
       const dx = (e.clientX - panStartRef.current.x) / zoom;
       const dy = (e.clientY - panStartRef.current.y) / zoom;
@@ -864,24 +872,9 @@ export function Canvas() {
   const perfOpenState = showPerf ? "true" : "false";
   const perfDisplayText = playing ? perfText : "paused";
 
-  const brushCursor = (() => {
-    if (!isBrushTool) return undefined;
-    const maxSize = 64;
-    // The brush paints in image-space with radius = brushSize * (imgSize / displayRect).
-    // The cursor must show the visual size on screen, which is brushSize scaled by
-    // the ratio of display size to image size, then multiplied by zoom.
-    // paintStroke radius in image px = brushSize * (imgSize.w / displayRect.w)
-    // That radius on screen = radius / (imgSize.w / displayRect.w) = brushSize
-    // So brushSize IS already the visual radius in CSS px (before zoom).
-    // But the cursor is outside the zoom transform, so multiply by zoom.
-    const visualDiameter = Math.min(Math.round(brushSize * 2 * zoom), maxSize);
-    const size = Math.max(4, visualDiameter);
-    const r = Math.max(1, size / 2 - 1);
-    const cx = size / 2;
-    const svg = `<svg xmlns='http://www.w3.org/2000/svg' width='${size}' height='${size}'><circle cx='${cx}' cy='${cx}' r='${r}' fill='none' stroke='white' stroke-width='1.5'/></svg>`;
-    const hotspot = Math.floor(size / 2);
-    return `url("data:image/svg+xml,${encodeURIComponent(svg)}") ${hotspot} ${hotspot}, crosshair`;
-  })();
+  // Brush circle overlay — follows pointer, no CSS cursor size limit
+  const brushCircleRef = useRef<HTMLDivElement>(null);
+  const brushDiameter = Math.round(brushSize * 2 * zoom);
 
   return (
     <div
@@ -890,7 +883,7 @@ export function Canvas() {
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      style={{ cursor: activeTool === "pan" ? "grab" : brushCursor }}
+      style={{ cursor: activeTool === "pan" ? "grab" : isBrushTool ? "none" : undefined }}
     >
       {draggingOver && (
         <div className="drop-overlay">
@@ -922,6 +915,10 @@ export function Canvas() {
           onPointerDown={handlePointerDown}
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
+          onPointerLeave={() => {
+            const bc = brushCircleRef.current;
+            if (bc) bc.style.display = "none";
+          }}
         >
           <div
             ref={bgRef}
@@ -1035,6 +1032,16 @@ export function Canvas() {
           </div>
         </div>
       </div>
+      {isBrushTool && (
+        <div
+          ref={brushCircleRef}
+          className="brush-circle"
+          style={{
+            width: brushDiameter,
+            height: brushDiameter,
+          }}
+        />
+      )}
     </div>
   );
 }

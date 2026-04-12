@@ -8,6 +8,7 @@ import { createEffect, EFFECT_LABELS, type EffectType } from "@/engine/effects";
 import type { ControlDescriptor } from "@/engine/effects/types";
 import { toast } from "./Toast";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { Select } from "./Select";
 
 function hslToHex(h: number, s: number, l: number): string {
   s /= 100;
@@ -159,17 +160,11 @@ function EffectControl({
       <div className="effect-control">
         <div className="prop-row">
           <span className="prop-label">{descriptor.label}</span>
-          <select
-            className="effect-select"
+          <Select
             value={String(current)}
-            onChange={(e) => onChange(descriptor.key, e.target.value)}
-          >
-            {descriptor.options.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => onChange(descriptor.key, v)}
+            options={descriptor.options}
+          />
         </div>
       </div>
     );
@@ -331,7 +326,22 @@ export function PropertiesPanel() {
         </div>
         <div className="prop-row">
           <span className="prop-label">Opacity</span>
-          <span className="prop-value">{Math.round(scene.ascii.opacity * 100)}%</span>
+          <span className="prop-value-group">
+            {scene.ascii.opacity !== 0.38 && (
+              <button className="prop-reset-btn" title="Reset to default" onClick={() => updateAscii({ opacity: 0.38 })}>
+                <ArrowCounterClockwise size={11} />
+              </button>
+            )}
+            <input
+              className="prop-value prop-value--input"
+              type="text"
+              value={`${Math.round(scene.ascii.opacity * 100)}%`}
+              onChange={(e) => {
+                const n = parseInt(e.target.value);
+                if (!Number.isNaN(n)) updateAscii({ opacity: Math.max(0, Math.min(100, n)) / 100 });
+              }}
+            />
+          </span>
         </div>
         <Slider.Root
           className="slider-root"
@@ -349,16 +359,16 @@ export function PropertiesPanel() {
 
         <div className="prop-row" style={{ marginTop: 8 }}>
           <span className="prop-label">Blend mode</span>
-          <select
-            className="effect-select"
+          <Select
             value={scene.ascii.blendMode}
-            onChange={(e) => updateAscii({ blendMode: e.target.value })}
-          >
-            <option value="screen">Screen</option>
-            <option value="overlay">Overlay</option>
-            <option value="multiply">Multiply</option>
-            <option value="normal">Normal</option>
-          </select>
+            onChange={(v) => updateAscii({ blendMode: v })}
+            options={[
+              { label: "Screen", value: "screen" },
+              { label: "Overlay", value: "overlay" },
+              { label: "Multiply", value: "multiply" },
+              { label: "Normal", value: "normal" },
+            ]}
+          />
         </div>
 
         <div className="prop-row" style={{ marginTop: 8 }}>
@@ -373,44 +383,63 @@ export function PropertiesPanel() {
           title="Characters from dark to light"
         />
 
-        <div className="prop-row" style={{ marginTop: 8 }}>
-          <span className="prop-label">Font size</span>
-          <span className="prop-value-group">
-            {scene.ascii.fontSize !== "0.85vw" && (
-              <button
-                className="prop-reset-btn"
-                title="Reset to default"
-                onClick={() => updateAscii({ fontSize: "0.85vw" })}
+        {(() => {
+          const fsVal = parseFloat(scene.ascii.fontSize) || 0.85;
+          const fsUnit = scene.ascii.fontSize.replace(/[\d.]/g, "") || "vw";
+          const sliderRange = fsUnit === "px"
+            ? { min: 6, max: 32, step: 1 }
+            : { min: 0.4, max: 2, step: 0.05 };
+          return (
+            <>
+              <div className="prop-row" style={{ marginTop: 8 }}>
+                <span className="prop-label">Font size</span>
+                <span className="prop-value-group">
+                  {scene.ascii.fontSize !== "0.85vw" && (
+                    <button
+                      className="prop-reset-btn"
+                      title="Reset to default"
+                      onClick={() => updateAscii({ fontSize: "0.85vw" })}
+                    >
+                      <ArrowCounterClockwise size={11} />
+                    </button>
+                  )}
+                  <input
+                    className="prop-value prop-value--input"
+                    type="text"
+                    value={fsUnit === "px" ? String(Math.round(fsVal)) : fsVal.toFixed(2)}
+                    onChange={(e) => {
+                      const n = Number(e.target.value);
+                      if (!Number.isNaN(n) && n >= sliderRange.min && n <= sliderRange.max) {
+                        updateAscii({ fontSize: `${n}${fsUnit}` });
+                      }
+                    }}
+                  />
+                  <Select
+                    value={fsUnit}
+                    onChange={(u) => updateAscii({ fontSize: `${u === "px" ? 12 : 0.85}${u}` })}
+                    options={[
+                      { label: "vw", value: "vw" },
+                      { label: "px", value: "px" },
+                    ]}
+                  />
+                </span>
+              </div>
+              <Slider.Root
+                className="slider-root"
+                value={[fsVal]}
+                min={sliderRange.min}
+                max={sliderRange.max}
+                step={sliderRange.step}
+                onValueChange={([v]) => updateAscii({ fontSize: `${v}${fsUnit}` })}
               >
-                <ArrowCounterClockwise size={11} />
-              </button>
-            )}
-            <input
-              className="prop-value prop-value--input"
-              type="text"
-              value={parseFloat(scene.ascii.fontSize)?.toFixed(2) || "0.85"}
-              onChange={(e) => {
-                const n = Number(e.target.value);
-                if (!Number.isNaN(n) && n >= 0.4 && n <= 2) {
-                  updateAscii({ fontSize: `${n}vw` });
-                }
-              }}
-            />
-          </span>
-        </div>
-        <Slider.Root
-          className="slider-root"
-          value={[parseFloat(scene.ascii.fontSize) || 0.85]}
-          min={0.4}
-          max={2}
-          step={0.05}
-          onValueChange={([v]) => updateAscii({ fontSize: `${v}vw` })}
-        >
-          <Slider.Track className="slider-track">
-            <Slider.Range className="slider-range" />
-          </Slider.Track>
-          <Slider.Thumb className="slider-thumb" />
-        </Slider.Root>
+                <Slider.Track className="slider-track">
+                  <Slider.Range className="slider-range" />
+                </Slider.Track>
+                <Slider.Thumb className="slider-thumb" />
+              </Slider.Root>
+            </>
+          );
+        })()}
       </div>
 
       <div className="panel-section panel-section--effects">
@@ -474,19 +503,15 @@ export function PropertiesPanel() {
                   <div className="effect-card-body">
                     <div className="effect-card-region">
                       <span className="prop-label">Region</span>
-                      <select
-                        className="effect-select"
+                      <Select
                         value={fx.maskRegion}
-                        onChange={(e) =>
-                          updateEffect(fx.id, {
-                            maskRegion: e.target.value as "foreground" | "background" | "both",
-                          })
-                        }
-                      >
-                        <option value="background">Background</option>
-                        <option value="foreground">Foreground</option>
-                        <option value="both">Both</option>
-                      </select>
+                        onChange={(v) => updateEffect(fx.id, { maskRegion: v as "foreground" | "background" | "both" })}
+                        options={[
+                          { label: "Background", value: "background" },
+                          { label: "Foreground", value: "foreground" },
+                          { label: "Both", value: "both" },
+                        ]}
+                      />
                     </div>
 
                     <div className="effect-card-region">
@@ -504,16 +529,14 @@ export function PropertiesPanel() {
 
                     <div className="effect-card-region">
                       <span className="prop-label">Mode</span>
-                      <select
-                        className="effect-select"
+                      <Select
                         value={fx.timeline.mode ?? "continuous"}
-                        onChange={(e) =>
-                          updateEffect(fx.id, { timeline: { ...fx.timeline, mode: e.target.value as "continuous" | "one-shot" } })
-                        }
-                      >
-                        <option value="continuous">Continuous</option>
-                        <option value="one-shot">One-shot</option>
-                      </select>
+                        onChange={(v) => updateEffect(fx.id, { timeline: { ...fx.timeline, mode: v as "continuous" | "one-shot" } })}
+                        options={[
+                          { label: "Continuous", value: "continuous" },
+                          { label: "One-shot", value: "one-shot" },
+                        ]}
+                      />
                     </div>
 
                     {controls.map((ctrl) => (
@@ -553,13 +576,15 @@ export function PropertiesPanel() {
                               </button>
                               <button
                                 className="preset-delete-btn"
-                                onClick={() => {
+                                title="Delete preset"
+                                onClick={(e) => {
+                                  e.stopPropagation();
                                   deletePreset(fx.type, name);
                                   setPresetVersion((v) => v + 1);
                                   toast(`Deleted "${name}"`);
                                 }}
                               >
-                                ×
+                                <X size={8} weight="bold" />
                               </button>
                             </div>
                           ))}
