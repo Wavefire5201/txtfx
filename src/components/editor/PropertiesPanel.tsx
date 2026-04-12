@@ -57,6 +57,8 @@ import {
   Fire,
   Gear,
   DotsSixVertical,
+  X,
+  ArrowCounterClockwise,
 } from "@phosphor-icons/react";
 
 const ALL_EFFECT_TYPES: EffectType[] = [
@@ -102,12 +104,36 @@ function EffectControl({
 
   if (descriptor.type === "slider") {
     const numVal = typeof current === "number" ? current : Number(descriptor.defaultValue);
+    const isInt = Number.isInteger(descriptor.step ?? 1);
+    const displayVal = isInt ? String(numVal) : numVal.toFixed(2);
+    const isDefault = numVal === Number(descriptor.defaultValue);
     return (
       <div className="effect-control">
         <div className="prop-row">
           <span className="prop-label">{descriptor.label}</span>
-          <span className="prop-value">
-            {Number.isInteger(descriptor.step ?? 1) ? numVal : numVal.toFixed(2)}
+          <span className="prop-value-group">
+            {!isDefault && (
+              <button
+                className="prop-reset-btn"
+                title="Reset to default"
+                onClick={() => onChange(descriptor.key, descriptor.defaultValue)}
+              >
+                <ArrowCounterClockwise size={9} />
+              </button>
+            )}
+            <input
+              className="prop-value prop-value--input"
+              type="text"
+              inputMode="decimal"
+              value={displayVal}
+              onChange={(e) => {
+                const n = Number(e.target.value);
+                if (!Number.isNaN(n)) {
+                  const clamped = Math.max(descriptor.min ?? 0, Math.min(descriptor.max ?? 100, n));
+                  onChange(descriptor.key, clamped);
+                }
+              }}
+            />
           </span>
         </div>
         <Slider.Root
@@ -221,24 +247,26 @@ function EffectControl({
               {colorList.length > 1 && (
                 <button
                   className="color-remove"
+                  title="Remove color"
                   onClick={() => {
                     onChange(descriptor.key, colorList.filter((_, j) => j !== i));
                   }}
                 >
-                  &times;
+                  <X size={8} weight="bold" />
                 </button>
               )}
             </div>
           ))}
           <button
             className="color-add"
+            title="Add color"
             onClick={() => {
               const hue = Math.floor(Math.random() * 360);
               const hex = `#${hslToHex(hue, 80, 60)}`;
               onChange(descriptor.key, [...colorList, hex]);
             }}
           >
-            +
+            <Plus size={12} weight="bold" />
           </button>
         </div>
       </div>
@@ -265,6 +293,7 @@ export function PropertiesPanel() {
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [presetVersion, setPresetVersion] = useState(0);
 
   if (collapsed) {
     return (
@@ -405,6 +434,14 @@ export function PropertiesPanel() {
                     >
                       <Switch.Thumb className="switch-thumb" />
                     </Switch.Root>
+                    <button
+                      className="effect-card-remove"
+                      onClick={() => removeEffect(fx.id)}
+                      title="Remove effect"
+                      aria-label="Remove effect"
+                    >
+                      <Trash size={12} />
+                    </button>
                   </div>
                 </div>
 
@@ -472,6 +509,7 @@ export function PropertiesPanel() {
                             const name = prompt("Preset name:");
                             if (name) {
                               savePreset(fx.type, name, fx.params);
+                              setPresetVersion((v) => v + 1);
                               toast(`Preset "${name}" saved`);
                             }
                           }}
@@ -496,6 +534,7 @@ export function PropertiesPanel() {
                                 className="preset-delete-btn"
                                 onClick={() => {
                                   deletePreset(fx.type, name);
+                                  setPresetVersion((v) => v + 1);
                                   toast(`Deleted "${name}"`);
                                 }}
                               >
@@ -507,13 +546,6 @@ export function PropertiesPanel() {
                       )}
                     </div>
 
-                    <button
-                      className="effect-remove-btn"
-                      onClick={() => removeEffect(fx.id)}
-                    >
-                      <Trash size={12} />
-                      <span>Remove effect</span>
-                    </button>
                   </div>
                 )}
               </div>
@@ -522,13 +554,29 @@ export function PropertiesPanel() {
         </div>
 
         <div className="add-effect-wrap">
-          <button
-            className="add-effect-btn"
-            onClick={() => setAddMenuOpen(!addMenuOpen)}
-          >
-            <Plus size={16} weight="bold" />
-            <span>Add Effect</span>
-          </button>
+          <div className="add-effect-row">
+            <button
+              className="add-effect-btn"
+              onClick={() => setAddMenuOpen(!addMenuOpen)}
+            >
+              <Plus size={16} weight="bold" />
+              <span>Add Effect</span>
+            </button>
+            {scene.effects.length > 0 && (
+              <button
+                className="clear-effects-btn"
+                onClick={() => {
+                  if (confirm("Remove all effects?")) {
+                    useEditorStore.getState().clearEffects();
+                    toast("All effects removed");
+                  }
+                }}
+                title="Clear all effects"
+              >
+                <Trash size={14} />
+              </button>
+            )}
+          </div>
 
           {addMenuOpen && (
             <div className="add-effect-menu">

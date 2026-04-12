@@ -34,7 +34,7 @@ export class MatrixEffect implements AsciiEffect {
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
     const newDensity = (params.density as number) ?? 0.4;
-    const needsRegen = this.columns.length === 0
+    const needsRegen = this.grid.cols === 0
       || newDensity !== this.density
       || grid.cols !== this.grid.cols
       || grid.rows !== this.grid.rows;
@@ -111,8 +111,8 @@ export class MatrixEffect implements AsciiEffect {
 
       const c = col.col;
 
-      // Cycle a random char occasionally
-      if (Math.random() < 0.05) {
+      // Cycle a random char occasionally (skip when paused / dt=0)
+      if (dt > 0 && Math.random() < 0.05) {
         const idx = Math.floor(Math.random() * col.chars.length);
         col.chars[idx] = randomChar();
       }

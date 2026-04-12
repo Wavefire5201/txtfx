@@ -22,6 +22,7 @@ interface EditorState {
   // Effects
   addEffect: (type: EffectType) => void;
   removeEffect: (id: string) => void;
+  clearEffects: () => void;
   toggleEffect: (id: string) => void;
   updateEffect: (id: string, updates: Partial<EffectConfig>) => void;
   updateEffectParams: (id: string, params: Record<string, unknown>) => void;
@@ -88,17 +89,36 @@ interface EditorState {
 let effectCounter = 0;
 
 const MAX_HISTORY = 50;
-let _history: SceneData[] = [];
+
+interface HistoryEntry {
+  scene: SceneData;
+  mask?: { data: Uint8Array; width: number; height: number };
+}
+
+let _history: HistoryEntry[] = [];
 let _historyIndex = -1;
 let _skipHistory = false;
 
-function pushHistory(scene: SceneData) {
+function pushHistory(scene: SceneData, mask?: Mask | null) {
   if (_skipHistory) return;
   // Truncate any redo states
   _history = _history.slice(0, _historyIndex + 1);
-  _history.push(JSON.parse(JSON.stringify(scene)));
+  _history.push({
+    scene: JSON.parse(JSON.stringify(scene)),
+    mask: mask ? { data: new Uint8Array(mask.data), width: mask.width, height: mask.height } : undefined,
+  });
   if (_history.length > MAX_HISTORY) _history.shift();
   _historyIndex = _history.length - 1;
+}
+
+/** Snapshot the current mask to the history stack (called after paint stroke ends) */
+export function pushMaskHistory() {
+  const state = useEditorStore.getState();
+  pushHistory(state.scene, state.mask);
+  useEditorStore.setState({
+    canUndo: _historyIndex > 0,
+    canRedo: false,
+  });
 }
 
 /**
@@ -154,6 +174,11 @@ export const useEditorStore = create<EditorState>((set) => ({
   removeEffect: (id) =>
     set((s) => ({
       scene: { ...s.scene, effects: s.scene.effects.filter((e) => e.id !== id) },
+    })),
+  clearEffects: () =>
+    set((s) => ({
+      scene: { ...s.scene, effects: [] },
+      expandedEffects: new Set<string>(),
     })),
   toggleEffect: (id) =>
     set((s) => ({
@@ -250,17 +275,33 @@ export const useEditorStore = create<EditorState>((set) => ({
     if (_historyIndex <= 0) return s;
     _historyIndex--;
     _skipHistory = true;
-    const restored = JSON.parse(JSON.stringify(_history[_historyIndex]));
+    const entry = _history[_historyIndex];
+    const restoredScene = JSON.parse(JSON.stringify(entry.scene));
+    const restoredMask = entry.mask ? new Mask(entry.mask.width, entry.mask.height, new Uint8Array(entry.mask.data)) : s.mask;
     _skipHistory = false;
-    return { scene: restored, canUndo: _historyIndex > 0, canRedo: true };
+    return {
+      scene: restoredScene,
+      mask: restoredMask,
+      maskVersion: s.maskVersion + 1,
+      canUndo: _historyIndex > 0,
+      canRedo: true,
+    };
   }),
   redo: () => set((s) => {
     if (_historyIndex >= _history.length - 1) return s;
     _historyIndex++;
     _skipHistory = true;
-    const restored = JSON.parse(JSON.stringify(_history[_historyIndex]));
+    const entry = _history[_historyIndex];
+    const restoredScene = JSON.parse(JSON.stringify(entry.scene));
+    const restoredMask = entry.mask ? new Mask(entry.mask.width, entry.mask.height, new Uint8Array(entry.mask.data)) : s.mask;
     _skipHistory = false;
-    return { scene: restored, canUndo: true, canRedo: _historyIndex < _history.length - 1 };
+    return {
+      scene: restoredScene,
+      mask: restoredMask,
+      maskVersion: s.maskVersion + 1,
+      canUndo: true,
+      canRedo: _historyIndex < _history.length - 1,
+    };
   }),
 }));
 

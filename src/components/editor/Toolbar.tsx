@@ -1,12 +1,13 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useRef, useState, useEffect } from "react";
 import { useEditorStore } from "@/lib/store";
 import { exportStandaloneHTML } from "@/engine/export/html";
 import { exportEmbedSnippet } from "@/engine/export/embed";
 import { type SceneData, createDefaultScene } from "@/engine/scene";
 import { Mask } from "@/engine/mask";
 import { clearState } from "@/lib/cache";
+import { uploadImageToR2 } from "@/lib/image-upload";
 import { toast } from "./Toast";
 import { ConfirmDialog } from "./ConfirmDialog";
 import {
@@ -50,7 +51,13 @@ export function Toolbar() {
   const [exportOpen, setExportOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const [lightMode, setLightMode] = useState(false);
+  const [modKey, setModKey] = useState("Ctrl");
+  useEffect(() => {
+    const isMac = typeof navigator !== "undefined" && /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent);
+    setModKey(isMac ? "⌘" : "Ctrl");
+  }, []);
 
   function toggleTheme() {
     const next = !lightMode;
@@ -153,15 +160,47 @@ export function Toolbar() {
   }
 
   async function handleShare() {
+    if (sharing) return; // prevent double-clicks
     try {
-      const scene = getExportScene();
+      if (!imageUrl) {
+        toast("Add an image first", "warning");
+        return;
+      }
+
+      setSharing(true);
+      toast("Uploading image...");
+
+      // 1. Upload image to R2 (compresses + dedupes via hash)
+      let uploaded: { publicUrl: string; hash: string };
+      try {
+        uploaded = await uploadImageToR2(imageUrl);
+      } catch (err) {
+        console.error("Image upload failed:", err);
+        toast("Image upload failed", "warning");
+        return;
+      }
+
+      // 2. Build scene without the embedded image data (R2 holds it now)
+      const sceneToShare = {
+        ...getExportScene(),
+        image: {
+          ...scene.image,
+          data: "", // no embedded data URL in the shared scene JSON
+        },
+      };
+
+      // 3. POST scene metadata + image URL/hash reference
       const res = await fetch("/api/scenes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ scene }),
+        body: JSON.stringify({
+          scene: sceneToShare,
+          imageUrl: uploaded.publicUrl,
+          imageHash: uploaded.hash,
+        }),
       });
       if (!res.ok) {
-        const err = await res.json();
+        const err = await res.json().catch(() => ({ error: "Failed to create share link" }));
         toast(err.error || "Failed to create share link", "warning");
         return;
       }
@@ -169,8 +208,11 @@ export function Toolbar() {
       const url = `${window.location.origin}/s/${id}`;
       await navigator.clipboard.writeText(url);
       toast("Share link copied to clipboard");
-    } catch {
+    } catch (err) {
+      console.error("Share failed:", err);
       toast("Failed to create share link", "warning");
+    } finally {
+      setSharing(false);
     }
   }
 
@@ -192,10 +234,10 @@ export function Toolbar() {
       <input ref={sceneFileRef} type="file" accept=".txtfx,.json" hidden onChange={handleOpenScene} />
 
       <span className="toolbar-sep">|</span>
-      <button className="toolbar-item" onClick={undo} disabled={!canUndo} title="Undo (Ctrl+Z)" suppressHydrationWarning>
+      <button className="toolbar-item" onClick={undo} disabled={!canUndo} title={`Undo (${modKey}+Z)`} suppressHydrationWarning>
         <ArrowCounterClockwise size={14} />
       </button>
-      <button className="toolbar-item" onClick={redo} disabled={!canRedo} title="Redo (Ctrl+Shift+Z)" suppressHydrationWarning>
+      <button className="toolbar-item" onClick={redo} disabled={!canRedo} title={`Redo (${modKey}+Shift+Z)`} suppressHydrationWarning>
         <ArrowClockwise size={14} />
       </button>
       <button className="toolbar-item" onClick={() => setResetOpen(true)} title="Reset canvas">
@@ -248,7 +290,7 @@ export function Toolbar() {
         {lightMode ? <Moon size={14} /> : <Sun size={14} />}
       </button>
 
-      <button className="toolbar-share" onClick={handleShare}>
+      <button className="toolbar-share" onClick={handleShare} disabled={sharing}>
         <Share size={14} style={{ marginRight: 6 }} />
         Share
       </button>

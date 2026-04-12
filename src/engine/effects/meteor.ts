@@ -22,6 +22,7 @@ export class MeteorEffect implements AsciiEffect {
   private grid: GridInfo = { cols: 0, rows: 0, charW: 0, charH: 0, fontSize: 0 };
   private meteors: MeteorState[] = [];
   private nextSpawn = 1.0;
+  private lastTime = 0;
   private dc = 0;
   private dr = 0;
   private spawnCounter = 0;
@@ -66,6 +67,12 @@ export class MeteorEffect implements AsciiEffect {
     const { cols, rows } = this.grid;
     const cells = this._cells; cells.length = 0;
 
+    // Detect loop wrap: if time went backward, reset nextSpawn to new time + interval
+    if (time < this.lastTime) {
+      this.nextSpawn = time + Math.random() * (this.intervalMax - this.intervalMin);
+    }
+    this.lastTime = time;
+
     if (time > this.nextSpawn) {
       const idx = this.colorMode === "random"
         ? Math.floor(Math.random() * this.colors.length)
@@ -85,15 +92,18 @@ export class MeteorEffect implements AsciiEffect {
 
     for (let i = this.meteors.length - 1; i >= 0; i--) {
       const m = this.meteors[i];
-      m.age += dt;
-      m.c += this.dc * m.speed * dt;
-      m.r += this.dr * m.speed * dt;
-
-      m.trail.push({ c: Math.round(m.c), r: Math.round(m.r), age: 0 });
-      while (m.trail.length > this.trailLength) {
-        m.trail.shift();
+      // Only advance state when time is actually moving (dt > 0).
+      // With dt=0 (paused re-render), just emit cells from existing state.
+      if (dt > 0) {
+        m.age += dt;
+        m.c += this.dc * m.speed * dt;
+        m.r += this.dr * m.speed * dt;
+        m.trail.push({ c: Math.round(m.c), r: Math.round(m.r), age: 0 });
+        while (m.trail.length > this.trailLength) {
+          m.trail.shift();
+        }
+        for (const p of m.trail) p.age += dt;
       }
-      for (const p of m.trail) p.age += dt;
 
       const offscreen = m.r > rows + 2 || m.c > cols + 2 || m.c < -2;
       if ((m.age > m.maxAge || offscreen) && m.trail.every((p) => p.age > 0.7)) {
@@ -111,10 +121,15 @@ export class MeteorEffect implements AsciiEffect {
         const color = this.colorMode === "gradient"
           ? pickColor(this.colors, this.colorMode, 0, ti / m.trail.length)
           : m.color;
-        cells.push({ row: p.r, col: p.c, char: ch, brightness, color, glowRadius: this.glowRadius });
+        if (p.r >= 0 && p.r < rows && p.c >= 0 && p.c < cols) {
+          cells.push({ row: p.r, col: p.c, char: ch, brightness, color, glowRadius: this.glowRadius });
+        }
       }
       if (m.age < m.maxAge && !offscreen) {
-        cells.push({ row: Math.round(m.r), col: Math.round(m.c), char: "@", brightness: 1, color: m.color, glowRadius: this.glowRadius });
+        const mr = Math.round(m.r), mc = Math.round(m.c);
+        if (mr >= 0 && mr < rows && mc >= 0 && mc < cols) {
+          cells.push({ row: mr, col: mc, char: "@", brightness: 1, color: m.color, glowRadius: this.glowRadius });
+        }
       }
     }
 

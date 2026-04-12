@@ -29,7 +29,7 @@ export class SnowEffect implements AsciiEffect {
   private _cells: EffectCell[] = [];
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
-    const needsRegen = this.flakes.length === 0
+    const needsRegen = this.grid.cols === 0
       || grid.cols !== this.grid.cols
       || grid.rows !== this.grid.rows;
 

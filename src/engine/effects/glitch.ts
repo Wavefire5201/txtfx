@@ -18,6 +18,7 @@ export class GlitchEffect implements AsciiEffect {
   private grid: GridInfo = { cols: 0, rows: 0, charW: 0, charH: 0, fontSize: 0 };
   private blocks: GlitchBlock[] = [];
   private nextSpawn = 0;
+  private lastTime = 0;
   private spawnCounter = 0;
   private frequency = 0.5;
   private blockSize = 8;
@@ -27,7 +28,7 @@ export class GlitchEffect implements AsciiEffect {
   private _cells: EffectCell[] = [];
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
-    const needsRegen = this.blocks.length === 0
+    const needsRegen = this.grid.cols === 0
       || grid.cols !== this.grid.cols
       || grid.rows !== this.grid.rows;
 
@@ -48,6 +49,12 @@ export class GlitchEffect implements AsciiEffect {
   update(dt: number, time: number, _mask: MaskGrid): EffectCell[] {
     const { cols, rows } = this.grid;
     const cells = this._cells; cells.length = 0;
+
+    // Detect loop wrap: if time went backward, reset nextSpawn to the new time
+    if (time < this.lastTime) {
+      this.nextSpawn = time;
+    }
+    this.lastTime = time;
 
     if (time > this.nextSpawn) {
       const w = 2 + Math.floor(Math.random() * this.blockSize);

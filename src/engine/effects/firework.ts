@@ -23,6 +23,7 @@ export class FireworkEffect implements AsciiEffect {
   private grid: GridInfo = { cols: 0, rows: 0, charW: 0, charH: 0, fontSize: 0 };
   private bursts: Burst[] = [];
   private nextSpawn = 3;
+  private lastTime = 0;
   private intervalMin = 3;
   private intervalMax = 5;
   private particleCount = 50;
@@ -57,6 +58,12 @@ export class FireworkEffect implements AsciiEffect {
   update(dt: number, time: number, _mask: MaskGrid): EffectCell[] {
     const { cols, rows } = this.grid;
     const cells = this._cells; cells.length = 0;
+
+    // Detect loop wrap: if time went backward, reset nextSpawn to new time + interval
+    if (time < this.lastTime) {
+      this.nextSpawn = time + Math.random() * (this.intervalMax - this.intervalMin);
+    }
+    this.lastTime = time;
 
     if (time > this.nextSpawn) {
       this.spawnBurst(cols, rows);

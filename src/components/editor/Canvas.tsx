@@ -1,7 +1,7 @@
 "use client";
 
-import { useRef, useEffect, useCallback, useState } from "react";
-import { useEditorStore, animationTime } from "@/lib/store";
+import { useRef, useEffect, useLayoutEffect, useCallback, useState } from "react";
+import { useEditorStore, animationTime, pushMaskHistory } from "@/lib/store";
 import { loadState } from "@/lib/cache";
 import { Mask } from "@/engine/mask";
 import { measureGrid, imageToAscii, sampleMeanColor } from "@/engine/ascii";
@@ -27,7 +27,13 @@ export function Canvas() {
 
   const imageUrl = useEditorStore((s) => s.imageUrl);
   const setImageUrl = useEditorStore((s) => s.setImageUrl);
-  const scene = useEditorStore((s) => s.scene);
+  // Fine-grained selectors: Canvas only re-renders when these specific fields change.
+  // ASCII visual props (opacity, blendMode, color, etc.) are applied via refs elsewhere
+  // to bypass React re-renders during slider drags.
+  const sceneEffects = useEditorStore((s) => s.scene.effects);
+  const asciiRamp = useEditorStore((s) => s.scene.ascii.ramp);
+  const playbackDuration = useEditorStore((s) => s.scene.playback.duration);
+  const playbackLoop = useEditorStore((s) => s.scene.playback.loop);
   const showAscii = useEditorStore((s) => s.showAscii);
   const showEffects = useEditorStore((s) => s.showEffects);
   const showMask = useEditorStore((s) => s.showMask);
@@ -171,7 +177,7 @@ export function Canvas() {
 
   // Rebuild effects when scene effects change
   useEffect(() => {
-    const configs = scene.effects;
+    const configs = sceneEffects;
     const prev = effectsRef.current;
 
     // Check if we can reuse existing instances (same types in same order)
@@ -212,7 +218,7 @@ export function Canvas() {
     if (asciiTextRef.current) {
       feedBaseText(effectsRef.current, asciiTextRef.current);
     }
-  }, [scene.effects, grid]);
+  }, [sceneEffects, grid]);
 
   const computeContainRect = useCallback(() => {
     const container = containerRef.current;
@@ -244,14 +250,20 @@ export function Canvas() {
     if (!img || !pre) return;
 
     const g = measureGrid(pre);
-    setGrid(g); // grid change triggers effects useEffect which handles init()
+    console.log("[txtfx regenerate]", {
+      cols: g.cols, rows: g.rows, charW: g.charW.toFixed(2), charH: g.charH.toFixed(2), fontSize: g.fontSize,
+      preHeight: pre.getBoundingClientRect().height.toFixed(1),
+      preStyleFontSize: pre.style.fontSize,
+      preStyleLineHeight: pre.style.lineHeight,
+    });
+    setGrid(g);
 
-    const text = imageToAscii(img, g, { ramp: scene.ascii.ramp });
+    const text = imageToAscii(img, g, { ramp: asciiRamp });
     pre.textContent = text;
     asciiTextRef.current = text;
 
     feedBaseText(effectsRef.current, text);
-  }, [scene.ascii.ramp]);
+  }, [asciiRamp]);
 
   // Resize observer
   useEffect(() => {
@@ -279,6 +291,64 @@ export function Canvas() {
       regenerate();
     });
   }, [regenerate]);
+
+  // Apply ASCII visual styles via store subscription + refs (bypasses React re-renders).
+  // useLayoutEffect so it runs synchronously before regenerate() ever measures the pre.
+  // imageUrl in deps: the pre only exists when imageUrl is set, so we need to re-run
+  // this effect after the pre is mounted to set its initial inline styles.
+  useLayoutEffect(() => {
+    function apply(ascii: ReturnType<typeof useEditorStore.getState>["scene"]["ascii"]) {
+      const a = asciiRef.current;
+      const e = effectPreRef.current;
+      // fontSize is stored as a CSS string (e.g. "11px" or "0.85vw") — use raw
+      const fontSize = ascii.fontSize;
+      const lineHeight = String(ascii.lineHeight);
+      const letterSpacing = ascii.letterSpacing;
+      if (a) {
+        a.style.color = ascii.color;
+        a.style.opacity = String(ascii.opacity);
+        // Blend mode applies to the static ASCII pre only — it blends with the bg image below
+        a.style.mixBlendMode = ascii.blendMode;
+        a.style.fontSize = fontSize;
+        a.style.lineHeight = lineHeight;
+        a.style.letterSpacing = letterSpacing;
+      }
+      if (e) {
+        // Effect pre always uses normal blend — it sits on top of the static pre and
+        // the effect chars should replace (not blend with) the base chars at hole positions
+        e.style.mixBlendMode = "normal";
+        e.style.fontSize = fontSize;
+        e.style.lineHeight = lineHeight;
+        e.style.letterSpacing = letterSpacing;
+      }
+    }
+    // Apply whenever the pre is (re)mounted
+    apply(useEditorStore.getState().scene.ascii);
+    // Subscribe to future changes without causing Canvas re-renders
+    return useEditorStore.subscribe((state, prev) => {
+      if (state.scene.ascii !== prev.scene.ascii) {
+        const oldA = prev.scene.ascii;
+        const newA = state.scene.ascii;
+        apply(newA);
+        // If font metrics changed, re-measure grid and regenerate ASCII text
+        if (newA.fontSize !== oldA.fontSize || newA.lineHeight !== oldA.lineHeight || newA.letterSpacing !== oldA.letterSpacing) {
+          // Defer regenerate to next frame so the inline styles are applied first
+          requestAnimationFrame(() => {
+            const img = imgRef.current;
+            const pre = asciiRef.current;
+            if (img && pre) {
+              const g = measureGrid(pre);
+              setGrid(g);
+              const text = imageToAscii(img, g, { ramp: useEditorStore.getState().scene.ascii.ramp });
+              pre.textContent = text;
+              asciiTextRef.current = text;
+              feedBaseText(effectsRef.current, text);
+            }
+          });
+        }
+      }
+    });
+  }, [imageUrl]);
 
   // Build mask grid when mask changes
   useEffect(() => {
@@ -335,7 +405,10 @@ export function Canvas() {
 
   // Fast-forward effects from time 0 to targetTime by simulating in steps
   function simulateToTime(targetTime: number) {
-    const configs = scene.effects;
+    // Read CURRENT configs from store, not from stale closure.
+    // The animation loop's tick() captures this function from an old render,
+    // so sceneEffects might be outdated if the user changed params during playback.
+    const configs = useEditorStore.getState().scene.effects;
     // Re-init all effects from scratch
     for (let i = 0; i < effectsRef.current.length && i < configs.length; i++) {
       effectsRef.current[i].instance.init(grid, configs[i].params);
@@ -538,55 +611,58 @@ export function Canvas() {
     perfFrames.current = 0;
     perfLastUpdate.current = performance.now();
 
-    const duration = scene.playback.duration;
-    const loop = scene.playback.loop;
+    const duration = playbackDuration;
+    const loop = playbackLoop;
 
     function tick() {
-      const elapsed = (performance.now() - startTimeRef.current) / 1000;
-      let now = elapsed;
-      if (loop && duration > 0) {
-        now = elapsed % duration;
+      try {
+        const elapsed = (performance.now() - startTimeRef.current) / 1000;
+        let now = elapsed;
+        if (loop && duration > 0) {
+          now = elapsed % duration;
+        }
+
+        // Detect loop wrap and re-initialize effects
+        let loopWrapped = false;
+        if (now < lastTimeRef.current) {
+          simulateToTime(now);
+          loopWrapped = true;
+        }
+
+        if (!loop && now > duration) {
+          useEditorStore.getState().setPlaying(false);
+          useEditorStore.getState().setCurrentTime(duration);
+          return;
+        }
+
+        const dt = loopWrapped ? 0 : Math.min(0.05, Math.abs(now - lastTimeRef.current));
+        lastTimeRef.current = now;
+        lastRenderedTimeRef.current = now;
+        animationTime.current = now;
+
+        if (grid.cols > 0) {
+          const currentMask = maskGridRef.current;
+          const result = compositeFrame(effectsRef.current, dt, now, currentMask, grid, asciiTextRef.current);
+          perfCells.current = result.glowCount;
+          renderGlow(result.glowCells, result.glowCount);
+          perfGlow.current = result.glowCount;
+        }
+
+        // Update perf overlay (~2x/sec to avoid overhead)
+        perfFrames.current++;
+        const perfNow = performance.now();
+        if (perfNow - perfLastUpdate.current > 500) {
+          const fps = Math.round(perfFrames.current / ((perfNow - perfLastUpdate.current) / 1000));
+          const frameMs = ((perfNow - perfLastUpdate.current) / perfFrames.current).toFixed(1);
+          perfFrames.current = 0;
+          perfLastUpdate.current = perfNow;
+          setPerfText(`${fps} fps · ${frameMs}ms · ${perfCells.current} cells · ${perfGlow.current} glow`);
+        }
+      } catch (err) {
+        console.error("[txtfx] animation tick error:", err);
       }
 
-      // Detect loop wrap and re-initialize effects
-      let loopWrapped = false;
-      if (now < lastTimeRef.current) {
-        simulateToTime(now);
-        loopWrapped = true;
-      }
-
-      if (!loop && now > duration) {
-        useEditorStore.getState().setPlaying(false);
-        useEditorStore.getState().setCurrentTime(duration);
-        return;
-      }
-
-      // After loop wrap, simulateToTime already brought effects to `now`,
-      // so use dt=0 to avoid double-advancing.
-      const dt = loopWrapped ? 0 : Math.min(0.05, Math.abs(now - lastTimeRef.current));
-      lastTimeRef.current = now;
-      lastRenderedTimeRef.current = now;
-      animationTime.current = now; // 60fps — read by Timeline for smooth playhead
-
-      if (grid.cols > 0) {
-        const currentMask = maskGridRef.current;
-        const result = compositeFrame(effectsRef.current, dt, now, currentMask, grid, asciiTextRef.current);
-        perfCells.current = result.glowCount;
-        renderGlow(result.glowCells, result.glowCount);
-        perfGlow.current = result.glowCount;
-      }
-
-      // Update perf overlay (~2x/sec to avoid overhead)
-      perfFrames.current++;
-      const perfNow = performance.now();
-      if (perfNow - perfLastUpdate.current > 500) {
-        const fps = Math.round(perfFrames.current / ((perfNow - perfLastUpdate.current) / 1000));
-        const frameMs = ((perfNow - perfLastUpdate.current) / perfFrames.current).toFixed(1);
-        perfFrames.current = 0;
-        perfLastUpdate.current = perfNow;
-        setPerfText(`${fps} fps · ${frameMs}ms · ${perfCells.current} cells · ${perfGlow.current} glow`);
-      }
-
+      // ALWAYS schedule next frame, even on error, so one bad frame doesn't kill the loop
       animRef.current = requestAnimationFrame(tick);
     }
 
@@ -601,7 +677,7 @@ export function Canvas() {
       }
       isMounted = false;
     };
-  }, [playing, grid, scene.playback.duration, scene.playback.loop]);
+  }, [playing, grid, playbackDuration, playbackLoop]);
 
   // When scrubbing while paused or editing effects while paused, re-render.
   useEffect(() => {
@@ -621,20 +697,27 @@ export function Canvas() {
       return;
     }
 
-    // User is scrubbing while paused — re-simulate to the new time
-    simulateToTime(currentTime);
+    // Only re-simulate if time actually changed (user scrubbed).
+    // Effect-param changes (toggle applyToAscii, color tweak) should just re-render
+    // at the current time without re-simulating, which would re-randomize state.
+    const timeDelta = Math.abs(currentTime - lastRenderedTimeRef.current);
+    if (timeDelta > 0.01) {
+      simulateToTime(currentTime);
+      lastRenderedTimeRef.current = currentTime;
+    }
+
+    // Re-render current state (dt=0 so no state advancement)
     const currentMask = maskGridRef.current;
     const result = compositeFrame(effectsRef.current, 0, currentTime, currentMask, grid, asciiTextRef.current);
     renderGlow(result.glowCells, result.glowCount);
-    lastRenderedTimeRef.current = currentTime;
-  }, [playing, currentTime, grid, scene.effects]);
+  }, [playing, currentTime, grid, sceneEffects]);
 
   // Auto-play when effects are added
   useEffect(() => {
-    if (scene.effects.length > 0 && imageUrl && !playing) {
+    if (sceneEffects.length > 0 && imageUrl && !playing) {
       setPlaying(true);
     }
-  }, [scene.effects.length, imageUrl]);
+  }, [sceneEffects.length, imageUrl]);
 
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
@@ -733,6 +816,10 @@ export function Canvas() {
 
   function handlePointerUp() {
     panStartRef.current = null;
+    if (isPaintingRef.current) {
+      // Snapshot mask state at end of stroke for undo/redo
+      pushMaskHistory();
+    }
     isPaintingRef.current = false;
     lastPaintRef.current = null;
   }
@@ -763,8 +850,6 @@ export function Canvas() {
     reader.readAsDataURL(file);
   }
 
-  const fontSize = scene.ascii.fontSize;
-
   function handleFileInput(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -774,12 +859,6 @@ export function Canvas() {
     reader.readAsDataURL(file);
     e.target.value = "";
   }
-
-  const preStyle: React.CSSProperties = {
-    fontSize,
-    lineHeight: scene.ascii.lineHeight,
-    letterSpacing: scene.ascii.letterSpacing,
-  };
 
   const isBrushTool = activeTool === "brush-fg" || activeTool === "brush-bg";
   const perfOpenState = showPerf ? "true" : "false";
@@ -873,12 +952,8 @@ export function Canvas() {
             ref={asciiRef}
             className="ascii-overlay"
             style={{
-              ...preStyle,
               position: "absolute",
               inset: 0,
-              color: scene.ascii.color,
-              opacity: scene.ascii.opacity,
-              mixBlendMode: scene.ascii.blendMode as React.CSSProperties["mixBlendMode"],
               zIndex: 2,
               visibility: showAscii ? "visible" : "hidden",
             }}
@@ -887,12 +962,10 @@ export function Canvas() {
             ref={effectPreRef}
             className="ascii-overlay"
             style={{
-              ...preStyle,
               position: "absolute",
               inset: 0,
               color: "transparent",
               opacity: 1,
-              mixBlendMode: scene.ascii.blendMode as React.CSSProperties["mixBlendMode"],
               zIndex: 3,
               pointerEvents: "none",
               visibility: showEffects ? "visible" : "hidden",

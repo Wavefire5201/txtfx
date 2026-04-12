@@ -9,10 +9,14 @@ export class Mask {
   readonly height: number;
   readonly data: Uint8Array;
 
-  constructor(width: number, height: number) {
+  constructor(width: number, height: number, data?: Uint8Array) {
     this.width = width;
     this.height = height;
-    this.data = new Uint8Array(width * height).fill(255); // default: all background
+    if (data && data.length === width * height) {
+      this.data = data;
+    } else {
+      this.data = new Uint8Array(width * height).fill(255); // default: all background
+    }
   }
 
   get(x: number, y: number): number {

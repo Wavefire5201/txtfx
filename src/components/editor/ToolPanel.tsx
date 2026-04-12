@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import * as Slider from "@radix-ui/react-slider";
 import { useEditorStore } from "@/lib/store";
 import {
@@ -12,11 +12,20 @@ import {
   Eraser,
   CaretLeft,
   CaretRight,
+  Command,
+  Control,
+  ArrowFatUp,
 } from "@phosphor-icons/react";
 import { ConfirmDialog } from "./ConfirmDialog";
 
 export function ToolPanel() {
   const [clearMaskOpen, setClearMaskOpen] = useState(false);
+  const [isMac, setIsMac] = useState(false);
+  useEffect(() => {
+    setIsMac(typeof navigator !== "undefined" && /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent));
+  }, []);
+  const ModKey = isMac ? <Command size={10} weight="bold" /> : <Control size={10} weight="bold" />;
+  const ShiftKey = <ArrowFatUp size={10} weight="bold" />;
   const activeTool = useEditorStore((s) => s.activeTool);
   const setActiveTool = useEditorStore((s) => s.setActiveTool);
   const brushSize = useEditorStore((s) => s.brushSize);
@@ -192,14 +201,14 @@ export function ToolPanel() {
       <div className="panel-section panel-section--shortcuts">
         <div className="panel-label">Shortcuts</div>
         <div className="shortcut-list">
-          <div className="shortcut-item"><kbd>Space</kbd><span>Play / Pause</span></div>
-          <div className="shortcut-item"><kbd>B</kbd><span>Foreground brush</span></div>
-          <div className="shortcut-item"><kbd>N</kbd><span>Background brush</span></div>
-          <div className="shortcut-item"><kbd>V</kbd><span>Pan tool</span></div>
-          <div className="shortcut-item"><kbd>M</kbd><span>Toggle mask</span></div>
-          <div className="shortcut-item"><kbd>[ ]</kbd><span>Brush size</span></div>
-          <div className="shortcut-item"><kbd>⌘Z</kbd><span>Undo</span></div>
-          <div className="shortcut-item"><kbd>⌘⇧Z</kbd><span>Redo</span></div>
+          <div className="shortcut-item"><span className="kbd-group"><kbd>Space</kbd></span><span>Play / Pause</span></div>
+          <div className="shortcut-item"><span className="kbd-group"><kbd>B</kbd></span><span>Foreground brush</span></div>
+          <div className="shortcut-item"><span className="kbd-group"><kbd>N</kbd></span><span>Background brush</span></div>
+          <div className="shortcut-item"><span className="kbd-group"><kbd>V</kbd></span><span>Pan tool</span></div>
+          <div className="shortcut-item"><span className="kbd-group"><kbd>M</kbd></span><span>Toggle mask</span></div>
+          <div className="shortcut-item"><span className="kbd-group"><kbd>[</kbd><kbd>]</kbd></span><span>Brush size</span></div>
+          <div className="shortcut-item" suppressHydrationWarning><span className="kbd-group"><kbd>{ModKey}</kbd><kbd>Z</kbd></span><span>Undo</span></div>
+          <div className="shortcut-item" suppressHydrationWarning><span className="kbd-group"><kbd>{ModKey}</kbd><kbd>{ShiftKey}</kbd><kbd>Z</kbd></span><span>Redo</span></div>
         </div>
       </div>
     </div>

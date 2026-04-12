@@ -251,15 +251,22 @@ body {
   transform: translateX(-50%);
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   background: rgba(26, 26, 31, 0.6);
-  padding: 4px 10px;
-  border-radius: 20px;
+  padding: 5px 12px;
+  border-radius: 999px;
   backdrop-filter: blur(8px);
   font-size: 10px;
   color: var(--text-muted);
   font-family: var(--font-mono, 'SFMono-Regular'), 'SFMono-Regular', Consolas, monospace;
   z-index: 5;
+  white-space: nowrap;
+  max-width: calc(100% - 20px);
+  overflow: hidden;
+}
+
+.viewport-info > span {
+  white-space: nowrap;
 }
 
 .viewport-info-sep {
@@ -267,10 +274,26 @@ body {
   opacity: 0.2;
 }
 
+@media (max-width: 600px) {
+  .viewport-info {
+    font-size: 9px;
+    gap: 6px;
+    padding: 4px 10px;
+  }
+  .viewport-info .viewport-info-sep {
+    display: none;
+  }
+}
+
 /* Canvas layers inside viewport */
 .viewport-canvas {
   position: relative;
   overflow: hidden;
+  /* Create an explicit stacking + isolation context so mix-blend-mode on child
+     layers blends within this container, not across the whole document. Without
+     this, the browser synthesizes a backdrop through the transformed ancestor
+     and can clip blended children unexpectedly. */
+  isolation: isolate;
 }
 
 .viewport-canvas .hero-bg,
@@ -289,18 +312,19 @@ body {
 .viewport-canvas .ascii-overlay {
   margin: 0;
   padding: 10px 8px 8px;
-  overflow: hidden;
+  /* No overflow:hidden — glyph ink with tight line-height extends beyond the line box,
+     and mix-blend-mode creates an isolation layer that would clip the overflow.
+     The parent .viewport-canvas already has overflow:hidden to clip anything escaping. */
   white-space: pre;
   user-select: none;
   pointer-events: none;
   font-family: var(--font-mono), 'JetBrains Mono', SFMono-Regular, Consolas, monospace;
   font-weight: 700;
   font-variant-ligatures: none;
-  mix-blend-mode: screen;
+  /* mix-blend-mode and color are set inline via JS so they update without React re-renders */
 }
 
 .viewport-canvas .ascii-overlay {
-  color: rgba(220, 230, 255, 0.38);
   text-shadow:
     0 0 8px rgba(255, 255, 255, 0.04),
     0 0 16px rgba(140, 180, 255, 0.03);
@@ -763,9 +787,15 @@ body {
   appearance: none;
 }
 .color-swatch::-webkit-color-swatch-wrapper {
-  padding: 2px;
+  padding: 0;
+  border-radius: 2px;
+  overflow: hidden;
 }
 .color-swatch::-webkit-color-swatch {
+  border: none;
+  border-radius: 2px;
+}
+.color-swatch::-moz-color-swatch {
   border: none;
   border-radius: 2px;
 }
@@ -774,58 +804,60 @@ body {
 }
 .color-remove {
   position: absolute;
-  top: -4px;
-  right: -4px;
+  top: -5px;
+  right: -5px;
   width: 14px;
   height: 14px;
   border-radius: 50%;
   border: none;
   background: var(--danger, #e53e3e);
   color: white;
-  font-size: 10px;
-  line-height: 1;
   cursor: pointer;
+  padding: 0;
   display: none;
   align-items: center;
   justify-content: center;
+  line-height: 0;
+  z-index: 2;
 }
 .color-swatch-wrap:hover .color-remove {
-  display: flex;
+  display: inline-flex;
 }
 .color-add {
   width: 28px;
   height: 28px;
-  border: 2px dashed var(--border);
+  border: 1px dashed var(--border-active);
   border-radius: 4px;
   background: none;
   color: var(--text-dim);
-  font-size: 16px;
   cursor: pointer;
-  display: flex;
+  padding: 0;
+  display: inline-flex;
   align-items: center;
   justify-content: center;
+  line-height: 0;
 }
 .color-add:hover {
   border-color: var(--accent);
   color: var(--accent);
 }
 
-.effect-remove-btn {
-  display: flex;
+.effect-card-remove {
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
-  margin-top: 8px;
-  padding: 5px 8px;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
   background: none;
   border: 1px solid transparent;
   border-radius: var(--radius);
   color: var(--text-muted);
-  font-size: 10px;
   cursor: pointer;
   transition: color 0.12s, background 0.12s, border-color 0.12s;
 }
 
-.effect-remove-btn:hover {
+.effect-card-remove:hover {
   color: var(--danger);
   background: var(--danger-bg);
   border-color: rgba(239, 125, 125, 0.15);
@@ -889,6 +921,30 @@ body {
 .add-effect-wrap {
   position: relative;
   padding: 0 0 4px;
+  z-index: 100;
+}
+.add-effect-row {
+  display: flex;
+  gap: 6px;
+}
+.clear-effects-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  flex-shrink: 0;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: color 0.12s, background 0.12s, border-color 0.12s;
+}
+.clear-effects-btn:hover {
+  color: var(--danger);
+  background: var(--danger-bg);
+  border-color: rgba(239, 125, 125, 0.15);
 }
 
 .add-effect-btn {
@@ -897,11 +953,11 @@ body {
   justify-content: center;
   gap: 6px;
   width: 100%;
-  padding: 8px;
-  background: transparent;
+  padding: 9px;
+  background: var(--bg-card);
   border: 1px dashed var(--border-active);
   border-radius: var(--radius);
-  color: var(--text-dim);
+  color: var(--text);
   font-size: 11px;
   font-weight: 500;
   cursor: pointer;
@@ -909,9 +965,9 @@ body {
 }
 
 .add-effect-btn:hover {
-  border-color: var(--accent);
-  color: var(--accent);
-  background: var(--accent-dim);
+  background: var(--bg-input);
+  border-color: var(--text-dim);
+  color: var(--text-bright);
 }
 
 .add-effect-menu {
@@ -923,7 +979,7 @@ body {
   border: 1px solid var(--border-active);
   border-radius: var(--radius-lg);
   padding: 4px;
-  z-index: 50;
+  z-index: 1000;
   max-height: 300px;
   overflow-y: auto;
   box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.4);
@@ -1052,21 +1108,37 @@ body {
 .shortcut-item {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
   font-size: 11px;
   color: var(--text-dim);
 }
 
+.shortcut-item > span:last-child {
+  flex: 1;
+}
+
+.kbd-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex-shrink: 0;
+  order: 2;
+}
+
 .shortcut-item kbd {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 1px 5px;
+  min-width: 18px;
+  height: 18px;
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: 3px;
   font-family: 'SFMono-Regular', Consolas, monospace;
   font-size: 9px;
   color: var(--text);
-  min-width: 20px;
   text-align: center;
 }
 
@@ -1081,6 +1153,49 @@ body {
 
 .prop-label { color: var(--text-dim); }
 .prop-value { color: var(--text-bright); font-family: 'SFMono-Regular', Consolas, monospace; font-size: 10px; }
+.prop-value--input {
+  width: 48px;
+  padding: 2px 4px;
+  text-align: right;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text-bright);
+  font-family: 'SFMono-Regular', Consolas, monospace;
+  font-size: 10px;
+  outline: none;
+  transition: border-color 0.12s;
+}
+.prop-value--input:hover {
+  border-color: var(--border-active);
+}
+.prop-value--input:focus {
+  border-color: var(--accent);
+}
+.prop-value-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.prop-reset-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  opacity: 0.5;
+  transition: opacity 0.12s, color 0.12s;
+}
+.prop-reset-btn:hover {
+  opacity: 1;
+  color: var(--accent);
+}
 
 /* ---- Upload overlay ---- */
 .upload-overlay {
@@ -1531,6 +1646,7 @@ body {
 }
 
 .zoom-btn {
+  flex: 0 0 20px;
   width: 20px;
   height: 20px;
   display: inline-flex;
@@ -1544,6 +1660,7 @@ body {
   line-height: 1;
   cursor: pointer;
   padding: 0;
+  aspect-ratio: 1 / 1;
 }
 .zoom-btn:hover {
   background: rgba(255, 255, 255, 0.06);

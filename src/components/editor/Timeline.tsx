@@ -164,18 +164,6 @@ export function Timeline() {
           />
           <span className="timeline-setting-unit">s</span>
         </span>
-        <span className="timeline-setting">
-          <label className="timeline-setting-label">FPS</label>
-          <input
-            type="number"
-            className="timeline-setting-input"
-            value={scene.playback.fps}
-            min={1}
-            max={60}
-            step={1}
-            onChange={(e) => updatePlayback({ fps: Math.max(1, Math.min(60, Number(e.target.value) || 30)) })}
-          />
-        </span>
         <button className="timeline-btn" onClick={toggleTimeline} title={timelineCollapsed ? "Expand timeline" : "Collapse timeline"}>
           {timelineCollapsed ? <CaretUp size={14} /> : <CaretDown size={14} />}
         </button>

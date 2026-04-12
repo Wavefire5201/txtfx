@@ -37,7 +37,7 @@ export class CustomEmitterEffect implements AsciiEffect {
   init(grid: GridInfo, params: Record<string, unknown>): void {
     const newSpawnX = (params.spawnX as number) ?? 0.5;
     const newSpawnY = (params.spawnY as number) ?? 1.0;
-    const needsRegen = this.particles.length === 0
+    const needsRegen = this.grid.cols === 0
       || grid.cols !== this.grid.cols
       || grid.rows !== this.grid.rows
       || newSpawnX !== this.spawnX

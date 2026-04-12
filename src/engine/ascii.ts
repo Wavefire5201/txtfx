@@ -19,7 +19,24 @@ export interface AsciiResult {
 export function measureGrid(container: HTMLElement): GridInfo {
   const style = getComputedStyle(container);
   const fontSize = parseFloat(style.fontSize);
-  const lineHeight = parseFloat(style.lineHeight);
+
+  // line-height handling: getComputedStyle may return a unitless value (e.g. "0.78"
+  // on Firefox) or a pixel value (e.g. "8.58px" on Chrome) or "normal". Normalize
+  // to pixels so downstream math is always in consistent units.
+  const lineHeightStr = style.lineHeight;
+  let lineHeight: number;
+  if (lineHeightStr === "normal") {
+    lineHeight = fontSize * 1.2; // browser default
+  } else {
+    const parsed = parseFloat(lineHeightStr);
+    if (lineHeightStr.endsWith("px")) {
+      lineHeight = parsed;
+    } else {
+      // Unitless multiplier — convert to pixels
+      lineHeight = parsed * fontSize;
+    }
+  }
+
   const padLeft = parseFloat(style.paddingLeft) || 0;
   const padRight = parseFloat(style.paddingRight) || 0;
   const padTop = parseFloat(style.paddingTop) || 0;

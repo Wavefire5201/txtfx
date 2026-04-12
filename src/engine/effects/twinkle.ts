@@ -26,7 +26,7 @@ export class TwinkleEffect implements AsciiEffect {
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
     const newCount = (params.count as number) ?? 50;
-    const needsRegen = this.stars.length === 0
+    const needsRegen = this.grid.cols === 0
       || newCount !== this.count
       || grid.cols !== this.grid.cols
       || grid.rows !== this.grid.rows;
