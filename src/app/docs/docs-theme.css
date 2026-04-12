@@ -1,0 +1,50 @@
+/* txtfx docs theme — loaded AFTER fumadocs-ui/style.css to override defaults.
+   Green accent (#7defa0) matching the editor UI. */
+
+/* Light mode */
+:root {
+  --color-fd-background: hsl(0, 0%, 100%);
+  --color-fd-foreground: hsl(240, 10%, 10%);
+  --color-fd-muted: hsl(240, 5%, 96%);
+  --color-fd-muted-foreground: hsl(240, 5%, 40%);
+  --color-fd-popover: hsl(0, 0%, 100%);
+  --color-fd-popover-foreground: hsl(240, 10%, 10%);
+  --color-fd-card: hsl(0, 0%, 98%);
+  --color-fd-card-foreground: hsl(240, 10%, 10%);
+  --color-fd-border: hsl(240, 5%, 88%);
+  --color-fd-primary: hsl(152, 60%, 36%);
+  --color-fd-primary-foreground: hsl(0, 0%, 100%);
+  --color-fd-secondary: hsl(240, 5%, 94%);
+  --color-fd-secondary-foreground: hsl(240, 10%, 10%);
+  --color-fd-accent: hsl(152, 40%, 92%);
+  --color-fd-accent-foreground: hsl(152, 60%, 28%);
+  --color-fd-ring: hsl(152, 60%, 36%);
+}
+
+/* Docs wrapper — overrides global body background so light mode works */
+.docs-wrapper {
+  background: var(--color-fd-background);
+  color: var(--color-fd-foreground);
+  min-height: 100vh;
+}
+
+/* Dark mode */
+.dark {
+  --color-fd-background: hsl(240, 20%, 4%);
+  --color-fd-foreground: hsl(0, 0%, 93%);
+  --color-fd-muted: hsl(240, 10%, 10%);
+  --color-fd-muted-foreground: hsl(0, 0%, 55%);
+  --color-fd-popover: hsl(240, 10%, 10%);
+  --color-fd-popover-foreground: hsl(0, 0%, 87%);
+  --color-fd-card: hsl(240, 10%, 8%);
+  --color-fd-card-foreground: hsl(0, 0%, 98%);
+  --color-fd-border: hsl(0, 0%, 15%);
+  --color-fd-primary: hsl(142, 78%, 71%);
+  --color-fd-primary-foreground: hsl(0, 0%, 4%);
+  --color-fd-secondary: hsl(240, 10%, 12%);
+  --color-fd-secondary-foreground: hsl(0, 0%, 92%);
+  --color-fd-accent: hsl(150, 30%, 14%);
+  --color-fd-accent-foreground: hsl(142, 78%, 71%);
+  --color-fd-ring: hsl(142, 78%, 71%);
+}
+

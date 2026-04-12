@@ -7,6 +7,7 @@ import { useEditorStore } from "@/lib/store";
 import { createEffect, EFFECT_LABELS, type EffectType } from "@/engine/effects";
 import type { ControlDescriptor } from "@/engine/effects/types";
 import { toast } from "./Toast";
+import { ConfirmDialog } from "./ConfirmDialog";
 
 function hslToHex(h: number, s: number, l: number): string {
   s /= 100;
@@ -118,7 +119,7 @@ function EffectControl({
                 title="Reset to default"
                 onClick={() => onChange(descriptor.key, descriptor.defaultValue)}
               >
-                <ArrowCounterClockwise size={9} />
+                <ArrowCounterClockwise size={11} />
               </button>
             )}
             <input
@@ -294,6 +295,9 @@ export function PropertiesPanel() {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [presetVersion, setPresetVersion] = useState(0);
+  const [clearOpen, setClearOpen] = useState(false);
+  const [presetInput, setPresetInput] = useState<{ effectType: string; effectId: string; params: Record<string, unknown> } | null>(null);
+  const [presetName, setPresetName] = useState("");
 
   if (collapsed) {
     return (
@@ -371,7 +375,28 @@ export function PropertiesPanel() {
 
         <div className="prop-row" style={{ marginTop: 8 }}>
           <span className="prop-label">Font size</span>
-          <span className="prop-value">{scene.ascii.fontSize}</span>
+          <span className="prop-value-group">
+            {scene.ascii.fontSize !== "0.85vw" && (
+              <button
+                className="prop-reset-btn"
+                title="Reset to default"
+                onClick={() => updateAscii({ fontSize: "0.85vw" })}
+              >
+                <ArrowCounterClockwise size={11} />
+              </button>
+            )}
+            <input
+              className="prop-value prop-value--input"
+              type="text"
+              value={parseFloat(scene.ascii.fontSize)?.toFixed(2) || "0.85"}
+              onChange={(e) => {
+                const n = Number(e.target.value);
+                if (!Number.isNaN(n) && n >= 0.4 && n <= 2) {
+                  updateAscii({ fontSize: `${n}vw` });
+                }
+              }}
+            />
+          </span>
         </div>
         <Slider.Root
           className="slider-root"
@@ -506,12 +531,8 @@ export function PropertiesPanel() {
                         <button
                           className="preset-save-btn"
                           onClick={() => {
-                            const name = prompt("Preset name:");
-                            if (name) {
-                              savePreset(fx.type, name, fx.params);
-                              setPresetVersion((v) => v + 1);
-                              toast(`Preset "${name}" saved`);
-                            }
+                            setPresetInput({ effectType: fx.type, effectId: fx.id, params: fx.params });
+                            setPresetName("");
                           }}
                         >
                           Save
@@ -565,12 +586,7 @@ export function PropertiesPanel() {
             {scene.effects.length > 0 && (
               <button
                 className="clear-effects-btn"
-                onClick={() => {
-                  if (confirm("Remove all effects?")) {
-                    useEditorStore.getState().clearEffects();
-                    toast("All effects removed");
-                  }
-                }}
+                onClick={() => setClearOpen(true)}
                 title="Clear all effects"
               >
                 <Trash size={14} />
@@ -597,6 +613,62 @@ export function PropertiesPanel() {
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={clearOpen}
+        onOpenChange={setClearOpen}
+        title="Clear all effects"
+        description="This will remove all effects from the scene. This action cannot be undone."
+        confirmLabel="Clear All"
+        onConfirm={() => {
+          useEditorStore.getState().clearEffects();
+          toast("All effects removed");
+        }}
+      />
+
+      {presetInput && (
+        <div className="confirm-overlay" onClick={() => setPresetInput(null)}>
+          <div className="confirm-content" onClick={(e) => e.stopPropagation()}>
+            <h3 className="confirm-title">Save Preset</h3>
+            <p className="confirm-desc">Enter a name for this preset.</p>
+            <input
+              className="preset-name-input"
+              type="text"
+              placeholder="Preset name"
+              value={presetName}
+              autoFocus
+              onChange={(e) => setPresetName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && presetName.trim()) {
+                  savePreset(presetInput.effectType, presetName.trim(), presetInput.params);
+                  setPresetVersion((v) => v + 1);
+                  toast(`Preset "${presetName.trim()}" saved`);
+                  setPresetInput(null);
+                }
+                if (e.key === "Escape") setPresetInput(null);
+              }}
+            />
+            <div className="confirm-actions">
+              <button className="confirm-btn confirm-btn--cancel" onClick={() => setPresetInput(null)}>Cancel</button>
+              <button
+                className="confirm-btn confirm-btn--confirm"
+                disabled={!presetName.trim()}
+                style={{ background: presetName.trim() ? "var(--accent-bg)" : undefined, borderColor: presetName.trim() ? "var(--accent)" : undefined, color: presetName.trim() ? "var(--accent)" : "var(--text-dim)" }}
+                onClick={() => {
+                  if (presetName.trim()) {
+                    savePreset(presetInput.effectType, presetName.trim(), presetInput.params);
+                    setPresetVersion((v) => v + 1);
+                    toast(`Preset "${presetName.trim()}" saved`);
+                    setPresetInput(null);
+                  }
+                }}
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

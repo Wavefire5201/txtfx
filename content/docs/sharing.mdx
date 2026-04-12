@@ -1,0 +1,26 @@
+---
+title: Sharing
+description: Share your ASCII art scenes with others
+---
+
+## Share Links
+
+Click the **Share** button in the toolbar to generate a unique link. The link includes your image (uploaded to CDN) and all effect settings.
+
+When someone opens the link, they see your scene with all effects playing.
+
+## How It Works
+
+1. Your image is compressed and uploaded to cloud storage (Cloudflare R2)
+2. The scene metadata (effects, settings) is saved to the database
+3. A short unique URL is generated
+4. If you share the same scene twice, you get the same link (dedup)
+
+## Scene Files
+
+You can also export scenes as `.txtfx` JSON files:
+1. Click **Export** in the toolbar
+2. Choose **Export JSON**
+3. The file contains all settings and the image data
+
+To load a scene file, click **Open Scene** and select the `.txtfx` file.

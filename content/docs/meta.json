@@ -1,0 +1,14 @@
+{
+  "title": "Docs",
+  "pages": [
+    "index",
+    "---Features---",
+    "effects",
+    "ascii-settings",
+    "masks",
+    "timeline",
+    "---Sharing---",
+    "sharing",
+    "embedding"
+  ]
+}

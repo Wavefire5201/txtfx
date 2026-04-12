@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState, useEffect } from "react";
+import Link from "next/link";
 import { useEditorStore } from "@/lib/store";
 import { exportStandaloneHTML } from "@/engine/export/html";
 import { exportEmbedSnippet } from "@/engine/export/embed";
@@ -286,6 +287,9 @@ export function Toolbar() {
 
       <div className="toolbar-spacer" />
 
+      <Link href="/docs" className="toolbar-item" target="_blank" title="Documentation">
+        Docs
+      </Link>
       <button className="toolbar-item" onClick={toggleTheme} title={lightMode ? "Dark mode" : "Light mode"}>
         {lightMode ? <Moon size={14} /> : <Sun size={14} />}
       </button>

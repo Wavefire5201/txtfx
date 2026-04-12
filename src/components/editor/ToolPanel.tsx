@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import * as Slider from "@radix-ui/react-slider";
 import { useEditorStore } from "@/lib/store";
 import {
+  Cursor,
   PaintBrush,
   PaintBrushHousehold,
   Hand,
@@ -43,6 +44,7 @@ export function ToolPanel() {
   const toggleCollapsed = useEditorStore((s) => s.toggleLeftPanel);
 
   const tools = [
+    { id: "select" as const, icon: <Cursor size={16} />, title: "Select (S)", shortcut: "S" },
     { id: "brush-fg" as const, icon: <PaintBrush size={16} />, title: "Foreground brush (B)", shortcut: "B" },
     { id: "brush-bg" as const, icon: <PaintBrushHousehold size={16} />, title: "Background brush (N)", shortcut: "N" },
     { id: "pan" as const, icon: <Hand size={16} />, title: "Pan (V)", shortcut: "V" },

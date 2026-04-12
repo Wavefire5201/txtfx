@@ -50,3 +50,5 @@ src/engine/export/player-bundle.ts
 # omc state
 .omc/
 .gstack/
+.playwright-mcp/
+.source/

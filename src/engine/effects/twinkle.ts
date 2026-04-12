@@ -20,7 +20,9 @@ export class TwinkleEffect implements AsciiEffect {
   private speedMax = 2.3;
   private bigChance = 0.35;
   private colors: string[] = ["#ffffff"];
+  private prevColors: string[] = ["#ffffff"];
   private colorMode: ColorMode = "random";
+  private prevColorMode: ColorMode = "random";
   private glowRadius = 18;
   private _cells: EffectCell[] = [];
 
@@ -57,12 +59,22 @@ export class TwinkleEffect implements AsciiEffect {
         };
       });
     } else {
-      // Visual change only — update colors in place, preserve positions/phases/big
+      // Visual change — update colors. Only reassign colorIdx if palette or mode changed.
+      const paletteChanged = this.colors.length !== this.prevColors.length
+        || this.colors.some((c, i) => c !== this.prevColors[i])
+        || this.colorMode !== this.prevColorMode;
       for (let i = 0; i < this.stars.length; i++) {
         const s = this.stars[i];
+        if (paletteChanged) {
+          s.colorIdx = this.colorMode === "random"
+            ? Math.floor(Math.random() * this.colors.length)
+            : i;
+        }
         s.color = pickColor(this.colors, this.colorMode, s.colorIdx);
       }
     }
+    this.prevColors = [...this.colors];
+    this.prevColorMode = this.colorMode;
   }
 
   update(_dt: number, time: number, _mask: MaskGrid): EffectCell[] {

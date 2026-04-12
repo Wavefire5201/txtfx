@@ -32,6 +32,9 @@ export function KeyboardShortcuts() {
           }
           store.setPlaying(!store.playing);
           break;
+        case "KeyS":
+          store.setActiveTool("select");
+          break;
         case "KeyB":
           store.setActiveTool("brush-fg");
           break;

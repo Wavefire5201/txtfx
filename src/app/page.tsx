@@ -103,6 +103,9 @@ export default function LandingPage() {
           >
             <GithubLogo size={20} weight="bold" />
           </a>
+          <Link href="/docs" className="landing-nav-link">
+            Docs
+          </Link>
           <Link href="/editor" className="landing-nav-link">
             Editor
           </Link>

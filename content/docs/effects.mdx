@@ -1,0 +1,90 @@
+---
+title: Effects
+description: All available ASCII effects and their controls
+---
+
+## Effect Types
+
+txtfx ships with 12 built-in effects. Each can be customized with sliders and supports multi-color palettes.
+
+### Twinkle
+Sparkling stars that pulse in and out. Great for night sky scenes.
+- **Star count** — number of stars (10–200)
+- **Speed** — pulse frequency
+- **Big star %** — chance of larger cross-shaped stars
+- **Glow radius** — size of the light bloom
+
+### Meteor
+Shooting stars with trailing tails.
+- **Angle** — direction of travel
+- **Trail length** — number of trail segments
+- **Interval** — time between spawns
+
+### Rain
+Falling rain drops.
+- **Density** — how many drops
+- **Speed** — fall speed range
+- **Wind** — horizontal drift
+
+### Snow
+Gentle snowfall with drift.
+- **Density** — flake count
+- **Speed** — fall speed
+- **Drift** — horizontal wobble amount
+
+### Fire
+Rising embers from the bottom edge.
+- **Intensity** — spawn rate
+- **Height** — how far embers rise
+- **Spread** — horizontal scatter
+
+### Matrix
+Falling green code columns (Matrix-style).
+- **Density** — number of active columns
+- **Speed** — fall speed range
+
+### Scanline
+Horizontal scan lines that sweep across the image.
+- **Count** — number of simultaneous scanlines
+- **Width** — thickness in rows
+- **Speed** — sweep speed
+
+### Glitch
+Random rectangular glitch blocks.
+- **Frequency** — spawn rate
+- **Block size** — max block dimensions
+- **Intensity** — visual strength
+
+### Typewriter
+Reveals the ASCII text character by character.
+- **Speed** — characters per second
+- **Cursor** — cursor character style
+
+### Decode
+Scrambles then reveals the ASCII text with random characters.
+- **Duration** — reveal time
+- **Settle time** — how long chars flicker before settling
+
+### Firework
+Bursting firework explosions.
+- **Particles** — number per burst
+- **Radius** — explosion size
+- **Interval** — time between bursts
+
+### Custom Emitter
+A general-purpose particle emitter.
+- **Spawn rate** — particles per second
+- **Speed / Spread** — velocity range
+- **Lifetime** — how long particles live
+- **Characters** — custom character set
+
+## Color Modes
+
+Every effect supports three color modes:
+- **Random** — each particle picks a random color from the palette
+- **Cycle** — colors cycle through the palette in order
+- **Gradient** — colors interpolate across the palette based on lifecycle or position
+
+## Apply to ASCII
+
+Toggle "Apply to ASCII" on any effect to colorize the existing ASCII characters instead of drawing the effect's own characters. The effect's glow and color are applied directly to the base text, keeping the image's ASCII structure visible.

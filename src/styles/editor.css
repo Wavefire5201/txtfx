@@ -1155,15 +1155,17 @@ body {
 .prop-value { color: var(--text-bright); font-family: 'SFMono-Regular', Consolas, monospace; font-size: 10px; }
 .prop-value--input {
   width: 48px;
-  padding: 2px 4px;
+  height: 20px;
+  padding: 0 4px;
   text-align: right;
   background: var(--bg-input);
   border: 1px solid var(--border);
-  border-radius: 3px;
+  border-radius: 4px;
   color: var(--text-bright);
   font-family: 'SFMono-Regular', Consolas, monospace;
   font-size: 10px;
   outline: none;
+  box-sizing: border-box;
   transition: border-color 0.12s;
 }
 .prop-value--input:hover {
@@ -1181,20 +1183,20 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
   padding: 0;
-  border: none;
-  border-radius: 3px;
-  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-input);
   color: var(--text-dim);
   cursor: pointer;
-  opacity: 0.5;
-  transition: opacity 0.12s, color 0.12s;
+  transition: border-color 0.12s, color 0.12s, background 0.12s;
 }
 .prop-reset-btn:hover {
-  opacity: 1;
   color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-dim);
 }
 
 /* ---- Upload overlay ---- */
@@ -1434,6 +1436,25 @@ body {
   background: rgba(255, 80, 80, 0.3);
   border-color: rgba(255, 80, 80, 0.6);
 }
+.preset-name-input {
+  width: 100%;
+  padding: 8px 12px;
+  margin-bottom: 16px;
+  background: var(--bg-input, #1e1e24);
+  border: 1px solid var(--border, #222);
+  border-radius: 6px;
+  color: var(--text-bright, #fff);
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.12s;
+}
+.preset-name-input:focus {
+  border-color: var(--accent, #7defa0);
+}
+.preset-name-input::placeholder {
+  color: var(--text-dim, #666);
+}
+
 @keyframes fade-in {
   from { opacity: 0; }
   to { opacity: 1; }

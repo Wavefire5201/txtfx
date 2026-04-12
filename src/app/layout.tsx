@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google";
+import { RootProvider } from "fumadocs-ui/provider/next";
 import { Analytics } from "@vercel/analytics/next";
 import "./globals.css";
 
@@ -24,9 +25,13 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${jakartaSans.variable} ${jetbrainsMono.variable}`}>
+    <html lang="en" className={`${jakartaSans.variable} ${jetbrainsMono.variable}`} suppressHydrationWarning>
       <body>
-        {children}
+        <RootProvider
+          theme={{ defaultTheme: "dark" }}
+        >
+          {children}
+        </RootProvider>
         <Analytics />
       </body>
     </html>

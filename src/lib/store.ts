@@ -6,7 +6,7 @@ import type { EffectType, MaskRegion } from "@/engine/effects/types";
 import { Mask } from "@/engine/mask";
 import { saveState } from "@/lib/cache";
 
-type Tool = "brush-fg" | "brush-bg" | "pan";
+type Tool = "select" | "brush-fg" | "brush-bg" | "pan";
 
 interface EditorState {
   // Scene
@@ -225,7 +225,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   brushSize: 24,
   setBrushSize: (size) => set({ brushSize: size }),
 
-  activeTool: "brush-fg",
+  activeTool: "select",
   setActiveTool: (tool) => set({ activeTool: tool }),
 
   playing: false,
