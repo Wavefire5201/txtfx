@@ -291,6 +291,7 @@ export function PropertiesPanel() {
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [presetVersion, setPresetVersion] = useState(0);
   const [clearOpen, setClearOpen] = useState(false);
+  const [deletePresetTarget, setDeletePresetTarget] = useState<{ type: string; name: string } | null>(null);
   const [presetInput, setPresetInput] = useState<{ effectType: string; effectId: string; params: Record<string, unknown> } | null>(null);
   const [presetName, setPresetName] = useState("");
 
@@ -579,9 +580,7 @@ export function PropertiesPanel() {
                                 title="Delete preset"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  deletePreset(fx.type, name);
-                                  setPresetVersion((v) => v + 1);
-                                  toast(`Deleted "${name}"`);
+                                  setDeletePresetTarget({ type: fx.type, name });
                                 }}
                               >
                                 <X size={8} weight="bold" />
@@ -648,6 +647,21 @@ export function PropertiesPanel() {
         onConfirm={() => {
           useEditorStore.getState().clearEffects();
           toast("All effects removed");
+        }}
+      />
+
+      <ConfirmDialog
+        open={!!deletePresetTarget}
+        onOpenChange={(open) => { if (!open) setDeletePresetTarget(null); }}
+        title="Delete preset"
+        description={`Delete "${deletePresetTarget?.name}"? This cannot be undone.`}
+        confirmLabel="Delete"
+        onConfirm={() => {
+          if (deletePresetTarget) {
+            deletePreset(deletePresetTarget.type, deletePresetTarget.name);
+            setPresetVersion((v) => v + 1);
+            toast(`Deleted "${deletePresetTarget.name}"`);
+          }
         }}
       />
 

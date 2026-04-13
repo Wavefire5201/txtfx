@@ -1,17 +1,19 @@
 import { createEffect } from "./effects";
 import type { AsciiEffect, GridInfo, MaskGrid, EffectCell } from "./effects/types";
+import type { MaskRegion } from "./effects/types";
 
 // The scene data is injected by the export template
 declare const SCENE: {
-  image: { data: string };
+  image: { data: string; width: number; height: number };
   ascii: { ramp: string; fontSize: string; fontFamily: string; lineHeight: number; letterSpacing: string; color: string; opacity: number; blendMode: string };
+  mask: { data: string; feather: number };
   effects: Array<{
     type: string;
     enabled: boolean;
     params: Record<string, unknown>;
     timeline: { start: number; end: number | null; loop?: boolean; mode?: "continuous" | "one-shot" };
     applyToAscii: boolean;
-    maskRegion: string;
+    maskRegion: MaskRegion;
   }>;
   playback: { duration: number; fps: number; loop: boolean };
 };
@@ -89,8 +91,52 @@ declare const SCENE: {
     img.src = SCENE.image.data;
   }
 
-  // Empty mask (no masking in export)
+  // Mask support: decode base64 PNG mask and downsample to grid
   const emptyMask: MaskGrid = { get: () => 1 };
+  let maskGrid: MaskGrid = emptyMask;
+
+  function decodeMask(cb: () => void) {
+    if (!SCENE.mask?.data) { cb(); return; }
+    const img = new Image();
+    img.onload = () => {
+      const maskW = img.naturalWidth;
+      const maskH = img.naturalHeight;
+      const cv = document.createElement("canvas");
+      cv.width = maskW; cv.height = maskH;
+      const cx = cv.getContext("2d")!;
+      cx.drawImage(img, 0, 0, maskW, maskH);
+      const d = cx.getImageData(0, 0, maskW, maskH).data;
+      // Downsample to grid: average mask values per cell
+      const cellW = maskW / cols;
+      const cellH = maskH / rows;
+      const values = new Float32Array(cols * rows);
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const x0 = Math.floor(c * cellW);
+          const y0 = Math.floor(r * cellH);
+          const x1 = Math.min(Math.floor((c + 1) * cellW), maskW);
+          const y1 = Math.min(Math.floor((r + 1) * cellH), maskH);
+          let sum = 0, count = 0;
+          for (let y = y0; y < y1; y++) {
+            for (let x = x0; x < x1; x++) {
+              sum += d[(y * maskW + x) * 4]; // red channel
+              count++;
+            }
+          }
+          values[r * cols + c] = count > 0 ? sum / count / 255 : 1;
+        }
+      }
+      maskGrid = {
+        get(row: number, col: number): number {
+          if (row < 0 || row >= rows || col < 0 || col >= cols) return 1;
+          return values[row * cols + col];
+        },
+      };
+      cb();
+    };
+    img.onerror = () => cb();
+    img.src = SCENE.mask.data;
+  }
 
   // Init effects from scene config
   const grid: GridInfo = { cols: 0, rows: 0, charW: 0, charH: 0, fontSize: 0 };
@@ -101,6 +147,8 @@ declare const SCENE: {
     continuous: boolean;
     color: string | null;
     glowRadius: number | null;
+    maskRegion: MaskRegion;
+    applyToAscii: boolean;
   }> = [];
 
   function initEffects() {
@@ -122,6 +170,8 @@ declare const SCENE: {
           continuous: cfg.timeline.mode ? cfg.timeline.mode === "continuous" : (cfg.timeline.loop ?? true),
           color: (cfg.params?.color as string) || null,
           glowRadius: (cfg.params?.glowRadius as number) || null,
+          maskRegion: cfg.maskRegion || "both",
+          applyToAscii: cfg.applyToAscii ?? false,
         });
       } catch { /* unknown effect type -- skip */ }
     }
@@ -187,9 +237,10 @@ declare const SCENE: {
       if (t < lastT - 0.1) initEffects();
       lastT = t;
 
-      // Collect cells from all effects
-      interface Cell extends EffectCell { rgb?: [number, number, number]; gr?: number | null; }
+      // Collect cells from all effects with mask filtering
+      interface Cell extends EffectCell { rgb?: [number, number, number]; gr?: number | null; asciiOverlay?: boolean; }
       const allCells: Cell[] = [];
+      const baseLines = baseText ? baseText.split("\n") : [];
       for (const a of activeEffects) {
         if (t < a.start) continue;
         if (a.end !== null && t > a.end) continue;
@@ -198,11 +249,29 @@ declare const SCENE: {
           const effectDur = a.end - a.start;
           if (effectDur > 0) effectTime = effectTime % effectDur;
         }
-        const cells = a.instance.update(dt, effectTime, emptyMask);
+        const cells = a.instance.update(dt, effectTime, maskGrid);
         for (const c of cells) {
+          const { row, col } = c;
+          if (row < 0 || row >= rows || col < 0 || col >= cols) continue;
+          // Apply mask region filtering
+          const maskVal = maskGrid.get(row, col);
+          if (a.maskRegion === "background" && maskVal < 0.5) continue;
+          if (a.maskRegion === "foreground" && maskVal >= 0.5) continue;
+
           const cell = c as Cell;
-          if (a.color) cell.rgb = hexToRGB(a.color) ?? undefined;
-          if (a.glowRadius != null) cell.gr = a.glowRadius;
+          // Per-cell color takes priority, then effect-level color
+          const colorHex = c.color || a.color;
+          if (colorHex) cell.rgb = hexToRGB(colorHex) ?? undefined;
+          cell.gr = c.glowRadius ?? a.glowRadius;
+
+          // Handle applyToAscii: colorize existing base char instead of effect char
+          if (a.applyToAscii) {
+            const baseCh = baseLines[row]?.[col];
+            if (!baseCh || baseCh === " ") continue;
+            cell.char = baseCh;
+            cell.asciiOverlay = true;
+          }
+
           allCells.push(cell);
         }
       }
@@ -217,13 +286,18 @@ declare const SCENE: {
       _brightMap.fill(0);
       _charBuf.fill(" ");
 
+      // Track which cells are ascii overlays (need hole-punching in base text)
+      const asciiOverlayFlags = new Uint8Array(total);
       for (const cell of allCells) {
         if (cell.row < 0 || cell.row >= rows || cell.col < 0 || cell.col >= cols) continue;
         const idx = cell.row * cols + cell.col;
         const b = cell.brightness ?? 0.5;
         if (b > _brightMap[idx]) {
           _brightMap[idx] = b;
-          _charBuf[idx] = cell.char;
+          // Only write to F text layer for cells WITHOUT color — colored cells
+          // are fully rendered on the glow canvas (text + sprites)
+          if (!cell.rgb) _charBuf[idx] = cell.char;
+          if (cell.asciiOverlay) asciiOverlayFlags[idx] = 1;
         }
       }
       let text = "";
@@ -232,6 +306,22 @@ declare const SCENE: {
         for (let c = 0; c < cols; c++) text += _charBuf[r * cols + c];
       }
       F.textContent = text;
+
+      // Hole-punch base text: replace ascii overlay positions with spaces
+      // so colored effect text shows through without doubling
+      if (baseText && asciiOverlayFlags.some(v => v)) {
+        let punched = "";
+        for (let r = 0; r < rows; r++) {
+          if (r > 0) punched += "\n";
+          const line = baseLines[r] || "";
+          for (let c = 0; c < cols; c++) {
+            punched += asciiOverlayFlags[r * cols + c] ? " " : (line[c] || " ");
+          }
+        }
+        A.textContent = punched;
+      } else if (baseText) {
+        A.textContent = baseText;
+      }
 
       // Glow canvas
       if (G) {
@@ -294,6 +384,6 @@ declare const SCENE: {
     raf = requestAnimationFrame(tick);
   }
 
-  buildAscii(animate);
-  window.addEventListener("resize", () => { measure(); buildAscii(animate); });
+  buildAscii(() => decodeMask(animate));
+  window.addEventListener("resize", () => { measure(); buildAscii(() => decodeMask(animate)); });
 })();

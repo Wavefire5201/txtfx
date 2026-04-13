@@ -90,9 +90,9 @@ export class FireworkEffect implements AsciiEffect {
         const c = Math.round(p.c);
         if (r >= 0 && r < rows && c >= 0 && c < cols) {
           const ch = t < 0.3 ? p.char : t < 0.6 ? "+" : ".";
-          // For gradient mode, use lifecycle position
+          // For gradient mode, whole burst shifts color together based on burst age
           const color = this.colorMode === "gradient"
-            ? pickColor(this.colors, this.colorMode, 0, t)
+            ? pickColor(this.colors, this.colorMode, 0, Math.min(1, burst.age / 1.5))
             : p.color;
           cells.push({ row: r, col: c, char: ch, brightness, color, glowRadius: this.glowRadius });
         }

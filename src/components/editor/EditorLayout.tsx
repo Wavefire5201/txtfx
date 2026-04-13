@@ -11,6 +11,7 @@ export function EditorLayout({ children }: { children: React.ReactNode }) {
     <div
       className={`editor${leftCollapsed ? " editor--left-collapsed" : ""}${rightCollapsed ? " editor--right-collapsed" : ""}${timelineCollapsed ? " editor--timeline-collapsed" : ""}`}
     >
+      <a href="#viewport" className="skip-to-content">Skip to canvas</a>
       {children}
     </div>
   );

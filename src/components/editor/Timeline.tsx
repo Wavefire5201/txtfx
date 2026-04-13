@@ -127,7 +127,7 @@ export function Timeline() {
   return (
     <div className="timeline" role="region" aria-label="Timeline">
       <div className="timeline-controls">
-        <button className="timeline-btn" onClick={handleSkipBack} title="Skip to start">
+        <button className="timeline-btn" onClick={handleSkipBack} title="Skip to start" aria-label="Skip to start">
           <SkipBack size={14} weight="fill" />
         </button>
         <button
@@ -143,7 +143,7 @@ export function Timeline() {
         >
           {playing ? <Pause size={16} weight="fill" /> : <Play size={16} weight="fill" />}
         </button>
-        <button className="timeline-btn" onClick={handleSkipForward} title="Skip to end">
+        <button className="timeline-btn" onClick={handleSkipForward} title="Skip to end" aria-label="Skip to end">
           <SkipForward size={14} weight="fill" />
         </button>
         <span className="toolbar-sep">|</span>
@@ -156,6 +156,7 @@ export function Timeline() {
           <input
             type="number"
             className="timeline-setting-input"
+            aria-label="Duration in seconds"
             value={scene.playback.duration}
             min={1}
             max={120}
@@ -215,6 +216,8 @@ export function Timeline() {
             const endPct = fx.timeline.end ? (fx.timeline.end / duration) * 100 : 100;
             const widthPct = endPct - startPct;
 
+            const NUDGE = 0.5; // seconds per arrow key press
+            const meta = EFFECT_LABELS[fx.type];
             return (
               <div key={fx.id} className="timeline-bar">
                 <div
@@ -223,6 +226,21 @@ export function Timeline() {
                 >
                   <div
                     className="timeline-bar-handle timeline-bar-handle--start"
+                    tabIndex={0}
+                    role="slider"
+                    aria-label={`${meta.label} start time`}
+                    aria-valuemin={0}
+                    aria-valuemax={fx.timeline.end ?? duration}
+                    aria-valuenow={Math.round(fx.timeline.start * 10) / 10}
+                    aria-valuetext={`${fx.timeline.start.toFixed(1)}s`}
+                    onKeyDown={(e) => {
+                      if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+                        e.preventDefault();
+                        const delta = e.key === "ArrowRight" ? NUDGE : -NUDGE;
+                        const newStart = Math.max(0, Math.min(fx.timeline.end ?? duration, fx.timeline.start + delta));
+                        updateEffect(fx.id, { timeline: { start: Math.round(newStart * 10) / 10, end: fx.timeline.end, mode: "continuous" } });
+                      }
+                    }}
                     onMouseDown={(e) => {
                       e.stopPropagation();
                       const startX = e.clientX;
@@ -231,6 +249,21 @@ export function Timeline() {
                   />
                   <div
                     className="timeline-bar-handle timeline-bar-handle--end"
+                    tabIndex={0}
+                    role="slider"
+                    aria-label={`${meta.label} end time`}
+                    aria-valuemin={fx.timeline.start}
+                    aria-valuemax={duration}
+                    aria-valuenow={Math.round((fx.timeline.end ?? duration) * 10) / 10}
+                    aria-valuetext={`${(fx.timeline.end ?? duration).toFixed(1)}s`}
+                    onKeyDown={(e) => {
+                      if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
+                        e.preventDefault();
+                        const delta = e.key === "ArrowRight" ? NUDGE : -NUDGE;
+                        const newEnd = Math.max(fx.timeline.start, Math.min(duration, (fx.timeline.end ?? duration) + delta));
+                        updateEffect(fx.id, { timeline: { start: fx.timeline.start, end: Math.round(newEnd * 10) / 10, mode: "continuous" } });
+                      }
+                    }}
                     onMouseDown={(e) => {
                       e.stopPropagation();
                       const startX = e.clientX;

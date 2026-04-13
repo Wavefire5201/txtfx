@@ -1,10 +1,18 @@
 @import "tailwindcss";
 
 :root {
-  --background: #0a0a0a;
+  --background: #0a0a0e;
   --foreground: #ededed;
+  --foreground-dim: #888;
+  --foreground-muted: #555;
+  --foreground-subtle: #999;
+  --foreground-faint: #a0a0a0;
   --accent: #7defa0;
   --accent-bg: #2d5a3d;
+  --accent-bg-hover: #366e4a;
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --hover-bg: rgba(255, 255, 255, 0.06);
+  --separator: #333;
 }
 
 @theme inline {
@@ -27,8 +35,8 @@ body {
 
 .landing {
   height: 100dvh;
-  background: #0a0a0e;
-  color: #ededed;
+  background: var(--background);
+  color: var(--foreground);
   overflow: hidden;
 }
 
@@ -84,7 +92,7 @@ body {
   font-weight: 700;
   font-size: 18px;
   letter-spacing: 0.08em;
-  color: #fff;
+  color: var(--foreground);
 }
 
 .landing-dev-badge {
@@ -92,9 +100,9 @@ body {
   font-size: 11px;
   font-weight: 400;
   letter-spacing: 0.03em;
-  color: #a0a0a0;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--foreground-faint);
+  background: var(--hover-bg);
+  border: 1px solid var(--border-subtle);
   border-radius: 4px;
   padding: 3px 10px;
 }
@@ -104,7 +112,7 @@ body {
 }
 
 .landing-nav-link {
-  color: #999;
+  color: var(--foreground-subtle);
   text-decoration: none;
   font-size: 14px;
   padding: 6px 16px;
@@ -115,8 +123,8 @@ body {
 }
 
 .landing-nav-link:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.06);
+  color: var(--foreground);
+  background: var(--hover-bg);
 }
 
 .landing-hero-content {
@@ -137,14 +145,14 @@ body {
   font-weight: 700;
   line-height: 1.15;
   letter-spacing: -0.02em;
-  color: #fff;
+  color: var(--foreground);
   max-width: 700px;
 }
 
 .landing-subtitle {
   font-size: clamp(14px, 1.5vw, 18px);
   line-height: 1.6;
-  color: #888;
+  color: var(--foreground-dim);
   max-width: 520px;
 }
 
@@ -169,7 +177,7 @@ body {
 }
 
 .landing-cta:hover {
-  background: #366e4a;
+  background: var(--accent-bg-hover);
   transform: translateY(-1px);
 }
 
@@ -190,12 +198,12 @@ body {
 }
 
 .landing-footer-sep {
-  color: #333;
+  color: var(--separator);
 }
 
 .landing-footer-text {
   font-size: 12px;
-  color: #555;
+  color: var(--foreground-muted);
 }
 
 

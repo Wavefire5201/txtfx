@@ -601,6 +601,16 @@ export function Canvas() {
       if (animRef.current) cancelAnimationFrame(animRef.current);
       return;
     }
+    // Respect reduced-motion: render a single static frame instead of animating
+    const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (prefersReducedMotion) {
+      if (grid.cols > 0) {
+        const currentMask = maskGridRef.current;
+        const result = compositeFrame(effectsRef.current, 0, currentTime, currentMask, grid, asciiTextRef.current);
+        renderGlow(result.glowCells, result.glowCount);
+      }
+      return;
+    }
     wasPlayingRef.current = true;
     let isMounted = true;
 
@@ -877,7 +887,8 @@ export function Canvas() {
   const brushDiameter = Math.round(brushSize * 2 * zoom);
 
   return (
-    <div
+    <main
+      id="viewport"
       className="viewport"
       ref={containerRef}
       onDragOver={handleDragOver}
@@ -1042,6 +1053,6 @@ export function Canvas() {
           }}
         />
       )}
-    </div>
+    </main>
   );
 }

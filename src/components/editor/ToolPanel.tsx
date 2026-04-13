@@ -130,6 +130,7 @@ export function ToolPanel() {
               className="prop-value prop-value--input"
               type="text"
               inputMode="numeric"
+              aria-label="Brush size"
               value={brushSize}
               onChange={(e) => {
                 const n = Number(e.target.value);
@@ -149,7 +150,7 @@ export function ToolPanel() {
           <Slider.Track className="slider-track">
             <Slider.Range className="slider-range" />
           </Slider.Track>
-          <Slider.Thumb className="slider-thumb" />
+          <Slider.Thumb className="slider-thumb" aria-label="Brush size" />
         </Slider.Root>
         <div className="prop-row" style={{ marginTop: 8 }}>
           <span className="prop-label">Feather</span>
@@ -163,6 +164,7 @@ export function ToolPanel() {
               className="prop-value prop-value--input"
               type="text"
               inputMode="numeric"
+              aria-label="Feather"
               value={maskFeather}
               onChange={(e) => {
                 const n = Number(e.target.value);
@@ -182,7 +184,7 @@ export function ToolPanel() {
           <Slider.Track className="slider-track">
             <Slider.Range className="slider-range" />
           </Slider.Track>
-          <Slider.Thumb className="slider-thumb" />
+          <Slider.Thumb className="slider-thumb" aria-label="Feather" />
         </Slider.Root>
 
         <button className="mask-clear-btn" onClick={() => setClearMaskOpen(true)}>
@@ -210,26 +212,30 @@ export function ToolPanel() {
             key={layer.key}
             className={`layer-item ${layer.active ? "layer-item--active" : ""}`}
             role="button"
+            tabIndex={0}
             aria-pressed={layer.active}
             onClick={() => toggleLayer(layer.key)}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleLayer(layer.key); } }}
           >
             <span>{layer.label}</span>
-            <button className="layer-vis">
+            <span className="layer-vis" aria-hidden="true">
               {layer.active ? <Eye size={14} /> : <EyeSlash size={14} />}
-            </button>
+            </span>
           </div>
         ))}
         <div
           key="image"
           className={`layer-item ${showImage ? "layer-item--active" : ""}`}
           role="button"
+          tabIndex={0}
           aria-pressed={showImage}
           onClick={() => toggleLayer("image")}
+          onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggleLayer("image"); } }}
         >
           <span>Source Image</span>
-          <button className="layer-vis">
+          <span className="layer-vis" aria-hidden="true">
             {showImage ? <Eye size={14} /> : <EyeSlash size={14} />}
-          </button>
+          </span>
         </div>
       </div>
 
