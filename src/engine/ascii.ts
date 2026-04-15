@@ -55,9 +55,13 @@ export function measureGrid(container: HTMLElement): GridInfo {
 
   const charH = lineHeight;
   const rect = container.getBoundingClientRect();
-  const cols = Math.floor((rect.width - padLeft - padRight) / charW);
-  const rows = Math.floor((rect.height - padTop - padBottom) / charH);
-  return { cols, rows, charW, charH, fontSize };
+  const innerW = rect.width - padLeft - padRight;
+  const innerH = rect.height - padTop - padBottom;
+  const cols = Math.floor(innerW / charW);
+  const rows = Math.floor(innerH / charH);
+  const padX = (innerW - cols * charW) / 2;
+  const padY = (innerH - rows * charH) / 2;
+  return { cols, rows, charW, charH, fontSize, padX, padY };
 }
 
 /**

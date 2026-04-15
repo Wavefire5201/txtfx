@@ -4,6 +4,10 @@ export interface GridInfo {
   charW: number;
   charH: number;
   fontSize: number;
+  /** Horizontal padding to center the grid within the container */
+  padX?: number;
+  /** Vertical padding to center the grid within the container */
+  padY?: number;
 }
 
 export interface MaskGrid {

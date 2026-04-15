@@ -258,6 +258,11 @@ export function Canvas() {
     });
     setGrid(g);
 
+    // Center the grid within the container by applying remainder padding
+    const pad = `${g.padY}px ${g.padX}px`;
+    pre.style.padding = pad;
+    if (effectPreRef.current) effectPreRef.current.style.padding = pad;
+
     const text = imageToAscii(img, g, { ramp: asciiRamp });
     pre.textContent = text;
     asciiTextRef.current = text;

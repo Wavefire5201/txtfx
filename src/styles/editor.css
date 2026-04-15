@@ -281,7 +281,7 @@ body {
   align-items: center;
   gap: 8px;
   background: rgba(26, 26, 31, 0.6);
-  padding: 5px 12px;
+  padding: 5px 12px 5px 5px;
   border-radius: 999px;
   backdrop-filter: blur(8px);
   font-size: 10px;
@@ -339,7 +339,7 @@ body {
 
 .viewport-canvas .ascii-overlay {
   margin: 0;
-  padding: 10px 8px 8px;
+  padding: 0;
   /* No overflow:hidden — glyph ink with tight line-height extends beyond the line box,
      and mix-blend-mode creates an isolation layer that would clip the overflow.
      The parent .viewport-canvas already has overflow:hidden to clip anything escaping. */
