@@ -34,6 +34,7 @@ export function Canvas() {
   const asciiRamp = useEditorStore((s) => s.scene.ascii.ramp);
   const playbackDuration = useEditorStore((s) => s.scene.playback.duration);
   const playbackLoop = useEditorStore((s) => s.scene.playback.loop);
+  const playbackFps = useEditorStore((s) => s.scene.playback.fps);
   const showAscii = useEditorStore((s) => s.showAscii);
   const showEffects = useEditorStore((s) => s.showEffects);
   const showMask = useEditorStore((s) => s.showMask);
@@ -249,6 +250,10 @@ export function Canvas() {
     const pre = asciiRef.current;
     if (!img || !pre) return;
 
+    // Reset padding before measuring so previous centering padding doesn't shrink the grid
+    pre.style.padding = "0";
+    if (effectPreRef.current) effectPreRef.current.style.padding = "0";
+
     const g = measureGrid(pre);
     console.log("[txtfx regenerate]", {
       cols: g.cols, rows: g.rows, charW: g.charW.toFixed(2), charH: g.charH.toFixed(2), fontSize: g.fontSize,
@@ -342,8 +347,15 @@ export function Canvas() {
             const img = imgRef.current;
             const pre = asciiRef.current;
             if (img && pre) {
+              // Reset centering padding before measuring
+              pre.style.padding = "0";
+              if (effectPreRef.current) effectPreRef.current.style.padding = "0";
               const g = measureGrid(pre);
               setGrid(g);
+              // Re-apply centering padding
+              const pad = `${g.padY}px ${g.padX}px`;
+              pre.style.padding = pad;
+              if (effectPreRef.current) effectPreRef.current.style.padding = pad;
               const text = imageToAscii(img, g, { ramp: useEditorStore.getState().scene.ascii.ramp });
               pre.textContent = text;
               asciiTextRef.current = text;
@@ -628,10 +640,24 @@ export function Canvas() {
 
     const duration = playbackDuration;
     const loop = playbackLoop;
+    // FPS cap: 0 means uncapped (vsync)
+    const fpsInterval = playbackFps > 0 ? 1000 / playbackFps : 0;
+    let lastFrameWall = performance.now();
 
     function tick() {
       try {
-        const elapsed = (performance.now() - startTimeRef.current) / 1000;
+        // FPS cap — skip frame if too soon
+        const wallNow = performance.now();
+        if (fpsInterval > 0 && wallNow - lastFrameWall < fpsInterval) {
+          animRef.current = requestAnimationFrame(tick);
+          return;
+        }
+        // Advance by interval (not wallNow) to avoid rAF jitter drift.
+        // If we fell behind by more than one interval, snap to now.
+        lastFrameWall += fpsInterval;
+        if (wallNow - lastFrameWall > fpsInterval) lastFrameWall = wallNow;
+
+        const elapsed = (wallNow - startTimeRef.current) / 1000;
         let now = elapsed;
         if (loop && duration > 0) {
           now = elapsed % duration;
@@ -692,7 +718,7 @@ export function Canvas() {
       }
       isMounted = false;
     };
-  }, [playing, grid, playbackDuration, playbackLoop]);
+  }, [playing, grid, playbackDuration, playbackLoop, playbackFps]);
 
   // When scrubbing while paused or editing effects while paused, re-render.
   useEffect(() => {
@@ -810,6 +836,8 @@ export function Canvas() {
     }
     if (activeTool !== "brush-fg" && activeTool !== "brush-bg") return;
     e.preventDefault();
+    // Snapshot pre-stroke mask so undo can restore it
+    pushMaskHistory();
     isPaintingRef.current = true;
     lastPaintRef.current = null;
     (e.target as HTMLElement).setPointerCapture(e.pointerId);

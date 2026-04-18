@@ -271,38 +271,38 @@ export const useEditorStore = create<EditorState>((set) => ({
 
   canUndo: false,
   canRedo: false,
-  undo: () => set((s) => {
-    if (_historyIndex <= 0) return s;
+  undo: () => {
+    if (_historyIndex <= 0) return;
     _historyIndex--;
     _skipHistory = true;
     const entry = _history[_historyIndex];
     const restoredScene = JSON.parse(JSON.stringify(entry.scene));
-    const restoredMask = entry.mask ? new Mask(entry.mask.width, entry.mask.height, new Uint8Array(entry.mask.data)) : s.mask;
-    _skipHistory = false;
-    return {
+    set((s) => ({
       scene: restoredScene,
-      mask: restoredMask,
+      mask: entry.mask ? new Mask(entry.mask.width, entry.mask.height, new Uint8Array(entry.mask.data)) : s.mask,
       maskVersion: s.maskVersion + 1,
       canUndo: _historyIndex > 0,
       canRedo: true,
-    };
-  }),
-  redo: () => set((s) => {
-    if (_historyIndex >= _history.length - 1) return s;
+    }));
+    _lastSceneJson = JSON.stringify(restoredScene);
+    _skipHistory = false;
+  },
+  redo: () => {
+    if (_historyIndex >= _history.length - 1) return;
     _historyIndex++;
     _skipHistory = true;
     const entry = _history[_historyIndex];
     const restoredScene = JSON.parse(JSON.stringify(entry.scene));
-    const restoredMask = entry.mask ? new Mask(entry.mask.width, entry.mask.height, new Uint8Array(entry.mask.data)) : s.mask;
-    _skipHistory = false;
-    return {
+    set((s) => ({
       scene: restoredScene,
-      mask: restoredMask,
+      mask: entry.mask ? new Mask(entry.mask.width, entry.mask.height, new Uint8Array(entry.mask.data)) : s.mask,
       maskVersion: s.maskVersion + 1,
       canUndo: true,
       canRedo: _historyIndex < _history.length - 1,
-    };
-  }),
+    }));
+    _lastSceneJson = JSON.stringify(restoredScene);
+    _skipHistory = false;
+  },
 }));
 
 // Track scene changes for undo/redo
@@ -312,7 +312,7 @@ useEditorStore.subscribe((state) => {
   const json = JSON.stringify(state.scene);
   if (json === _lastSceneJson) return;
   _lastSceneJson = json;
-  pushHistory(state.scene);
+  pushHistory(state.scene, state.mask);
   // Update canUndo/canRedo flags
   useEditorStore.setState({
     canUndo: _historyIndex > 0,

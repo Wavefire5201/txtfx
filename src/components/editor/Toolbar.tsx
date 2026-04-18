@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useEditorStore } from "@/lib/store";
 import { exportStandaloneHTML } from "@/engine/export/html";
 import { exportEmbedSnippet } from "@/engine/export/embed";
+import { exportGif } from "@/engine/export/gif";
+import { exportWebM } from "@/engine/export/video";
 import { type SceneData, createDefaultScene } from "@/engine/scene";
 import { Mask } from "@/engine/mask";
 import { clearState } from "@/lib/cache";
@@ -25,6 +27,8 @@ import {
   Trash,
   Sun,
   Moon,
+  FilmStrip,
+  VideoCamera,
 } from "@phosphor-icons/react";
 
 function downloadBlob(blob: Blob, filename: string) {
@@ -52,6 +56,9 @@ export function Toolbar() {
   const [exportOpen, setExportOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState(0);
+  const [gifResolutionOpen, setGifResolutionOpen] = useState(false);
+  const [videoResolutionOpen, setVideoResolutionOpen] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [lightMode, setLightMode] = useState(false);
   const [modKey, setModKey] = useState("Ctrl");
@@ -160,6 +167,80 @@ export function Toolbar() {
     setExporting(false);
   }
 
+  async function handleExportGif(targetHeight: number) {
+    if (!imageUrl) {
+      toast("Add an image first", "warning");
+      return;
+    }
+    setGifResolutionOpen(false);
+    setExportOpen(false);
+    setExporting(true);
+    setExportProgress(0);
+    await new Promise((r) => setTimeout(r, 0));
+    try {
+      const img = new Image();
+      img.src = imageUrl;
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = reject;
+      });
+      const aspectRatio = img.naturalWidth / img.naturalHeight;
+      const gifHeight = targetHeight;
+      const gifWidth = Math.round(gifHeight * aspectRatio);
+      const currentMask = useEditorStore.getState().mask;
+      const blob = await exportGif(getExportScene(), img, currentMask, {
+        width: gifWidth,
+        height: gifHeight,
+        onProgress: (pct) => setExportProgress(Math.round(pct * 100)),
+      });
+      downloadBlob(blob, `txtfx-${new Date().toISOString().slice(0, 10)}.gif`);
+      toast("GIF exported");
+    } catch (err) {
+      console.error("GIF export failed:", err);
+      toast("GIF export failed", "warning");
+    } finally {
+      setExporting(false);
+      setExportProgress(0);
+    }
+  }
+
+  async function handleExportWebM(targetHeight: number) {
+    if (!imageUrl) {
+      toast("Add an image first", "warning");
+      return;
+    }
+    setVideoResolutionOpen(false);
+    setExportOpen(false);
+    setExporting(true);
+    setExportProgress(0);
+    await new Promise((r) => setTimeout(r, 0));
+    try {
+      const img = new Image();
+      img.src = imageUrl;
+      await new Promise<void>((resolve, reject) => {
+        img.onload = () => resolve();
+        img.onerror = reject;
+      });
+      const aspectRatio = img.naturalWidth / img.naturalHeight;
+      const h = targetHeight;
+      const w = Math.round(h * aspectRatio);
+      const currentMask = useEditorStore.getState().mask;
+      const { blob, ext } = await exportWebM(getExportScene(), img, currentMask, {
+        width: w,
+        height: h,
+        onProgress: (pct) => setExportProgress(Math.round(pct * 100)),
+      });
+      downloadBlob(blob, `txtfx-${new Date().toISOString().slice(0, 10)}.${ext}`);
+      toast("Video exported");
+    } catch (err) {
+      console.error("WebM export failed:", err);
+      toast("Video export failed", "warning");
+    } finally {
+      setExporting(false);
+      setExportProgress(0);
+    }
+  }
+
   async function handleShare() {
     if (sharing) return; // prevent double-clicks
     try {
@@ -260,7 +341,7 @@ export function Toolbar() {
           disabled={exporting}
         >
           <Export size={14} style={{ marginRight: 4 }} />
-          {exporting ? "Exporting..." : "Export"}
+          {exporting ? `Exporting${exportProgress > 0 ? ` ${exportProgress}%` : ""}...` : "Export"}
           <CaretDown size={10} style={{ marginLeft: 4, opacity: 0.5 }} />
         </button>
 
@@ -276,9 +357,18 @@ export function Toolbar() {
                 <FileHtml size={14} />
                 <span>Standalone HTML</span>
               </button>
-              <button className="toolbar-dropdown-item" onClick={handleExportEmbed}>
+              <button className="toolbar-dropdown-item" disabled title="Coming soon">
                 <Code size={14} />
                 <span>Copy embed snippet</span>
+              </button>
+              <div className="toolbar-dropdown-divider" />
+              <button className="toolbar-dropdown-item" disabled title="Coming soon">
+                <FilmStrip size={14} />
+                <span>Export GIF</span>
+              </button>
+              <button className="toolbar-dropdown-item" disabled title="Coming soon">
+                <VideoCamera size={14} />
+                <span>Export WebM</span>
               </button>
             </div>
           </>

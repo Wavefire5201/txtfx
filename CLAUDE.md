@@ -1,5 +1,9 @@
 @AGENTS.md
 
+## Project
+
+- Package manager: **bun** (never use npm)
+
 ## Effect Engine Conventions
 
 ### init() must preserve particle state

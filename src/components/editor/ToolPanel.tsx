@@ -121,8 +121,8 @@ export function ToolPanel() {
         <div className="prop-row">
           <span className="prop-label">Brush size</span>
           <span className="prop-value-group">
-            {brushSize !== 20 && (
-              <button className="prop-reset-btn" title="Reset to default" onClick={() => setBrushSize(20)}>
+            {brushSize !== 24 && (
+              <button className="prop-reset-btn" title="Reset to default" onClick={() => setBrushSize(24)}>
                 <ArrowCounterClockwise size={11} />
               </button>
             )}

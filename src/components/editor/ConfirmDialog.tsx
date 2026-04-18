@@ -23,9 +23,9 @@ export function ConfirmDialog({
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="confirm-overlay" />
-        <Dialog.Content className="confirm-content" aria-describedby="confirm-desc">
+        <Dialog.Content className="confirm-content">
           <Dialog.Title className="confirm-title">{title}</Dialog.Title>
-          <Dialog.Description className="confirm-desc" id="confirm-desc">
+          <Dialog.Description className="confirm-desc">
             {description}
           </Dialog.Description>
           <div className="confirm-actions">
