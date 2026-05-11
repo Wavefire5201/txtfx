@@ -88,30 +88,14 @@ Notes:
 - [ ] Curated effect preset packs (cinematic, retro, cyberpunk, etc.)
 - [ ] Community-submitted templates
 - [ ] Categories, tags, ratings
-- [ ] Premium templates (paid)
 
 ### Teams & Collaboration
 - [ ] Shared workspaces
-- [ ] Real-time collaborative editing
 - [ ] Role-based permissions (viewer, editor, admin)
 - [ ] Edit history with attribution
 
 ### Analytics
 - [ ] Per-scene view counts, embed counts
-- [ ] Referrer tracking (where are embeds being used)
-- [ ] Creator dashboard with stats over time
-
-### Monetization
-- [ ] Free tier: basic effects, watermark on export
-- [ ] Pro tier: all effects, no watermark, video export, priority rendering
-- [ ] API access for programmatic scene generation
-
-### Platform
-- [ ] Mobile app (React Native or PWA)
-- [ ] CLI tool for batch processing images
-- [ ] Figma/Framer plugin
-- [ ] WordPress plugin for embedding
-- [ ] OBS overlay integration for live streaming
 
 ---
 
@@ -120,7 +104,6 @@ Notes:
 - [ ] Mask coordinate alignment (center-crop mismatch between ASCII and mask)
 - [ ] Export masking support in HTML runtime
 - [-] Object pooling for `EffectCell` (eliminate remaining per-frame allocations)
-- [ ] WebGL renderer — full GPU-accelerated pipeline (font atlas + instanced quads + fragment shader glow). Path to 120fps+. Replace DOM text + Canvas 2D hybrid with single WebGL context. SDF text for crisp scaling.
 - [-] OffscreenCanvas + Web Worker for glow rendering (off main thread)
 - [ ] Web Worker for effect computation (off main thread)
 - [ ] Service Worker for offline support
