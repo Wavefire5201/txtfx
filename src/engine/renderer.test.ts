@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { compositeFrame, type ActiveEffect, type GlowCell } from "./renderer";
+import { compositeFrame, collectHoles, holesChanged, punchHoles, type ActiveEffect, type GlowCell } from "./renderer";
 import type { GridInfo, MaskGrid, EffectCell, AsciiEffect, ControlDescriptor } from "./effects/types";
 
 // ---------------------------------------------------------------------------
@@ -213,6 +213,18 @@ describe("compositeFrame", () => {
     expect(lines[0][0]).toBe(" ");
   });
 
+  it("skips text building when buildText is false but still emits glow cells", () => {
+    const grid = makeGrid(5, 3);
+    const fx = new StubEffect();
+    fx.cells = [{ row: 1, col: 2, char: "*", brightness: 1, color: "#ff0000" }];
+
+    const result = compositeFrame([makeActive(fx)], 0.016, 0, makeMask(), grid, undefined, { buildText: false });
+
+    expect(result.text).toBe("");
+    expect(result.glowCount).toBe(1);
+    expect(result.glowCells[0].char).toBe("*");
+  });
+
   it("applyToAscii colorizes existing base text characters", () => {
     const grid = makeGrid(5, 1);
     const fx = new StubEffect();
@@ -234,5 +246,41 @@ describe("compositeFrame", () => {
     expect(result.glowCount).toBe(1);
     expect(result.glowCells[0].char).toBe("e");
     expect(result.glowCells[0].color).toBe("#00ff00");
+  });
+});
+
+describe("hole helpers", () => {
+  function cell(row: number, col: number, asciiOverlay?: boolean): GlowCell {
+    return { row, col, char: "x", color: "#fff", brightness: 1, asciiOverlay };
+  }
+
+  it("collectHoles only includes asciiOverlay cells within glowCount", () => {
+    const cells = [cell(0, 1, true), cell(0, 2), cell(1, 0, true)];
+    const holes = collectHoles(cells, 2, 4); // third cell beyond count
+    expect([...holes].sort()).toEqual([1]);
+  });
+
+  it("holesChanged detects add, remove, and no-change", () => {
+    expect(holesChanged(new Set(), new Set())).toBe(false);
+    expect(holesChanged(new Set([1, 2]), new Set([2, 1]))).toBe(false);
+    expect(holesChanged(new Set([1]), new Set([1, 2]))).toBe(true);
+    expect(holesChanged(new Set([1, 2]), new Set([1]))).toBe(true);
+    expect(holesChanged(new Set([1]), new Set([2]))).toBe(true);
+  });
+
+  it("punchHoles replaces hole positions and normalizes line lengths", () => {
+    const punched = punchHoles(["abcd", "ef"], new Set([1, 6]), 4, 3);
+    const lines = punched.split("\n");
+    expect(lines).toEqual(["a cd", "ef  ", "    "]);
+  });
+
+  it("punchHoles fast-path keeps untouched rows identical", () => {
+    const punched = punchHoles(["abcd", "efgh"], new Set([5]), 4, 2);
+    expect(punched.split("\n")).toEqual(["abcd", "e gh"]);
+  });
+
+  it("punchHoles handles holes on rows beyond the base text", () => {
+    const punched = punchHoles(["ab"], new Set([0, 9]), 4, 3);
+    expect(punched.split("\n")).toEqual([" b  ", "    ", "    "]);
   });
 });

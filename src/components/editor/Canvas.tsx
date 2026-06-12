@@ -3,11 +3,11 @@
 import { useRef, useEffect, useLayoutEffect, useCallback, useState } from "react";
 import { useEditorStore, animationTime, pushMaskHistory } from "@/lib/store";
 import { loadState } from "@/lib/cache";
-import { Mask } from "@/engine/mask";
+import { Mask, IncrementalMaskGrid, type MaskDirtyRect } from "@/engine/mask";
 import { measureGrid, imageToAscii, sampleMeanColor } from "@/engine/ascii";
 import { createEffect } from "@/engine/effects";
-import { compositeFrame, type ActiveEffect, type GlowCell } from "@/engine/renderer";
-import { getGlowSprite } from "@/engine/glow-cache";
+import { compositeFrame, collectHoles, holesChanged, punchHoles, type ActiveEffect, type GlowCell } from "@/engine/renderer";
+import { drawEffectCells, type EffectCanvasLayout } from "@/engine/effect-canvas";
 import type { GridInfo, MaskGrid } from "@/engine/effects/types";
 import { ImageSquare, UploadSimple, ChartLine, Minus, Plus, ArrowCounterClockwise } from "@phosphor-icons/react";
 import { toast } from "./Toast";
@@ -19,7 +19,6 @@ const EMPTY_MASK: MaskGrid = { get: () => 1 };
 export function Canvas() {
   const containerRef = useRef<HTMLDivElement>(null);
   const asciiRef = useRef<HTMLPreElement>(null);
-  const effectPreRef = useRef<HTMLPreElement>(null);
   const glowCanvasRef = useRef<HTMLCanvasElement>(null);
   const maskOverlayRef = useRef<HTMLCanvasElement>(null);
   const bgRef = useRef<HTMLDivElement>(null);
@@ -60,7 +59,7 @@ export function Canvas() {
   const [displayRect, setDisplayRect] = useState({ x: 0, y: 0, w: 0, h: 0 });
   const [draggingOver, setDraggingOver] = useState(false);
   const [showPerf, setShowPerf] = useState(true);
-  const [perfText, setPerfText] = useState("0 fps · 0.0ms · 0 cells · 0 glow");
+  const [perfText, setPerfText] = useState("0 fps · render 0.0ms · 0 cells");
 
   const imgRef = useRef<HTMLImageElement | null>(null);
   const effectsRef = useRef<ActiveEffect[]>([]);
@@ -73,13 +72,18 @@ export function Canvas() {
   const lastPaintRef = useRef<{ x: number; y: number } | null>(null);
   const panStartRef = useRef<{ x: number; y: number; startPanX: number; startPanY: number } | null>(null);
   const maskGridRef = useRef<MaskGrid>(EMPTY_MASK);
+  const incrementalMaskRef = useRef<IncrementalMaskGrid | null>(null);
   const wasPlayingRef = useRef(false);
   const pauseGuardRef = useRef(0);
   const perfFrames = useRef(0);
   const perfLastUpdate = useRef(0);
   const perfCells = useRef(0);
   const perfGlow = useRef(0);
-  const lastFontRef = useRef("");
+  // Cached computed style of the base <pre> — reading getComputedStyle every
+  // frame forces a style recalc. Invalidated when font metrics/padding change.
+  const preStyleRef = useRef<{ font: string; padLeft: number; padTop: number } | null>(null);
+  const prevHolesRef = useRef<Set<number>>(new Set());
+  const basePunchedRef = useRef(false);
 
   // Restore auto-saved scene on mount
   useEffect(() => {
@@ -132,39 +136,6 @@ export function Canvas() {
       }
     }).catch(() => { /* storage unavailable */ });
   }, []);
-
-  // Load image
-  useEffect(() => {
-    if (!imageUrl) return;
-    const img = new Image();
-    // Only set crossOrigin for remote URLs — data URLs don't need it and it can cause issues
-    if (!imageUrl.startsWith("data:")) {
-      img.crossOrigin = "anonymous";
-    }
-    img.onerror = () => {
-      console.warn("Failed to load image:", imageUrl.slice(0, 100));
-    };
-    img.onload = () => {
-      imgRef.current = img;
-      setImgSize({ w: img.naturalWidth, h: img.naturalHeight });
-
-      // Initialize mask if needed
-      const store = useEditorStore.getState();
-      if (!store.mask || store.mask.width !== img.naturalWidth || store.mask.height !== img.naturalHeight) {
-        initMask(img.naturalWidth, img.naturalHeight);
-      }
-
-      if (bgRef.current) {
-        bgRef.current.style.backgroundImage = `url("${imageUrl}")`;
-        const [r, g, b] = sampleMeanColor(img);
-        bgRef.current.style.backgroundColor = `rgb(${(r * 0.5) | 0}, ${(g * 0.5) | 0}, ${(b * 0.5) | 0})`;
-      }
-
-      computeContainRect();
-      regenerate();
-    };
-    img.src = imageUrl;
-  }, [imageUrl]);
 
   // Feed base text to text-dependent effects
   function feedBaseText(effects: ActiveEffect[], text: string) {
@@ -252,28 +223,58 @@ export function Canvas() {
 
     // Reset padding before measuring so previous centering padding doesn't shrink the grid
     pre.style.padding = "0";
-    if (effectPreRef.current) effectPreRef.current.style.padding = "0";
 
     const g = measureGrid(pre);
-    console.log("[txtfx regenerate]", {
-      cols: g.cols, rows: g.rows, charW: g.charW.toFixed(2), charH: g.charH.toFixed(2), fontSize: g.fontSize,
-      preHeight: pre.getBoundingClientRect().height.toFixed(1),
-      preStyleFontSize: pre.style.fontSize,
-      preStyleLineHeight: pre.style.lineHeight,
-    });
     setGrid(g);
 
     // Center the grid within the container by applying remainder padding
-    const pad = `${g.padY}px ${g.padX}px`;
-    pre.style.padding = pad;
-    if (effectPreRef.current) effectPreRef.current.style.padding = pad;
+    pre.style.padding = `${g.padY}px ${g.padX}px`;
+    preStyleRef.current = null; // font/padding changed — re-read on next frame
 
     const text = imageToAscii(img, g, { ramp: asciiRamp });
     pre.textContent = text;
     asciiTextRef.current = text;
+    basePunchedRef.current = false;
+    prevHolesRef.current = new Set();
 
     feedBaseText(effectsRef.current, text);
   }, [asciiRamp]);
+
+  // Load image
+  useEffect(() => {
+    if (!imageUrl) return;
+    const img = new Image();
+    // Only set crossOrigin for remote URLs — data URLs don't need it and it can cause issues
+    if (!imageUrl.startsWith("data:")) {
+      img.crossOrigin = "anonymous";
+    }
+    img.onerror = () => {
+      console.warn("Failed to load image:", imageUrl.slice(0, 100));
+    };
+    img.onload = () => {
+      imgRef.current = img;
+      setImgSize({ w: img.naturalWidth, h: img.naturalHeight });
+
+      // Initialize mask if needed
+      const store = useEditorStore.getState();
+      if (!store.mask || store.mask.width !== img.naturalWidth || store.mask.height !== img.naturalHeight) {
+        initMask(img.naturalWidth, img.naturalHeight);
+      }
+
+      if (bgRef.current) {
+        bgRef.current.style.backgroundImage = `url("${imageUrl}")`;
+        const [r, g, b] = sampleMeanColor(img);
+        bgRef.current.style.backgroundColor = `rgb(${(r * 0.5) | 0}, ${(g * 0.5) | 0}, ${(b * 0.5) | 0})`;
+      }
+
+      computeContainRect();
+      regenerate();
+    };
+    img.src = imageUrl;
+    // computeContainRect/regenerate/initMask are stable per render and only run
+    // inside onload; re-running this effect for them would re-load the image.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [imageUrl]);
 
   // Resize observer
   useEffect(() => {
@@ -297,7 +298,7 @@ export function Canvas() {
   // Re-render when fonts load (prevents mismatched layers)
   useEffect(() => {
     document.fonts.ready.then(() => {
-      lastFontRef.current = ""; // Force canvas font refresh
+      preStyleRef.current = null; // Force canvas font refresh
       regenerate();
     });
   }, [regenerate]);
@@ -309,28 +310,17 @@ export function Canvas() {
   useLayoutEffect(() => {
     function apply(ascii: ReturnType<typeof useEditorStore.getState>["scene"]["ascii"]) {
       const a = asciiRef.current;
-      const e = effectPreRef.current;
-      // fontSize is stored as a CSS string (e.g. "11px" or "0.85vw") — use raw
-      const fontSize = ascii.fontSize;
-      const lineHeight = String(ascii.lineHeight);
-      const letterSpacing = ascii.letterSpacing;
       if (a) {
         a.style.color = ascii.color;
         a.style.opacity = String(ascii.opacity);
         // Blend mode applies to the static ASCII pre only — it blends with the bg image below
         a.style.mixBlendMode = ascii.blendMode;
-        a.style.fontSize = fontSize;
-        a.style.lineHeight = lineHeight;
-        a.style.letterSpacing = letterSpacing;
+        // fontSize is stored as a CSS string (e.g. "11px" or "0.85vw") — use raw
+        a.style.fontSize = ascii.fontSize;
+        a.style.lineHeight = String(ascii.lineHeight);
+        a.style.letterSpacing = ascii.letterSpacing;
       }
-      if (e) {
-        // Effect pre always uses normal blend — it sits on top of the static pre and
-        // the effect chars should replace (not blend with) the base chars at hole positions
-        e.style.mixBlendMode = "normal";
-        e.style.fontSize = fontSize;
-        e.style.lineHeight = lineHeight;
-        e.style.letterSpacing = letterSpacing;
-      }
+      preStyleRef.current = null; // styles changed — re-read on next frame
     }
     // Apply whenever the pre is (re)mounted
     apply(useEditorStore.getState().scene.ascii);
@@ -349,16 +339,16 @@ export function Canvas() {
             if (img && pre) {
               // Reset centering padding before measuring
               pre.style.padding = "0";
-              if (effectPreRef.current) effectPreRef.current.style.padding = "0";
               const g = measureGrid(pre);
               setGrid(g);
               // Re-apply centering padding
-              const pad = `${g.padY}px ${g.padX}px`;
-              pre.style.padding = pad;
-              if (effectPreRef.current) effectPreRef.current.style.padding = pad;
+              pre.style.padding = `${g.padY}px ${g.padX}px`;
+              preStyleRef.current = null;
               const text = imageToAscii(img, g, { ramp: useEditorStore.getState().scene.ascii.ramp });
               pre.textContent = text;
               asciiTextRef.current = text;
+              basePunchedRef.current = false;
+              prevHolesRef.current = new Set();
               feedBaseText(effectsRef.current, text);
             }
           });
@@ -367,22 +357,30 @@ export function Canvas() {
     });
   }, [imageUrl]);
 
-  // Build mask grid when mask changes
+  // (Re)build the mask grid on structural changes (clear, undo, restore,
+  // grid/image resize). Brush strokes update it incrementally in paintStroke
+  // and only bump maskVersion at stroke END — the full O(image) rebuild per
+  // pointermove was what made painting on large images laggy.
   useEffect(() => {
     const m = useEditorStore.getState().mask;
     if (m && grid.cols > 0 && imgSize.w > 0) {
-      maskGridRef.current = m.toGrid(grid, imgSize.w, imgSize.h);
+      incrementalMaskRef.current = m.createIncrementalGrid(grid, imgSize.w, imgSize.h);
+      maskGridRef.current = incrementalMaskRef.current;
     }
   }, [maskVersion, grid, imgSize]);
 
-  // Draw mask overlay (always update so toggling visibility is instant)
-  useEffect(() => {
-    if (!maskOverlayRef.current) return;
+  // Draw mask overlay. With a region: regenerate only the display pixels the
+  // brush touched (full-canvas regeneration per pointermove was O(pixels)).
+  const redrawMaskOverlay = useCallback((region?: MaskDirtyRect) => {
     const canvas = maskOverlayRef.current;
+    if (!canvas) return;
     if (displayRect.w === 0 || displayRect.h === 0) return;
 
-    canvas.width = displayRect.w;
-    canvas.height = displayRect.h;
+    if (canvas.width !== displayRect.w || canvas.height !== displayRect.h) {
+      canvas.width = displayRect.w;
+      canvas.height = displayRect.h;
+      region = undefined; // resize cleared the canvas — full redraw
+    }
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
@@ -393,16 +391,28 @@ export function Canvas() {
       return;
     }
 
-    const imgData = ctx.createImageData(canvas.width, canvas.height);
     const scaleX = m.width / canvas.width;
     const scaleY = m.height / canvas.height;
 
-    for (let y = 0; y < canvas.height; y++) {
-      for (let x = 0; x < canvas.width; x++) {
-        const mx = Math.floor(x * scaleX);
-        const my = Math.floor(y * scaleY);
+    // Display-pixel bounds to regenerate (whole canvas without a region)
+    let dx0 = 0, dy0 = 0, dx1 = canvas.width - 1, dy1 = canvas.height - 1;
+    if (region) {
+      dx0 = Math.max(0, Math.floor(region.x0 / scaleX) - 1);
+      dx1 = Math.min(canvas.width - 1, Math.ceil((region.x1 + 1) / scaleX) + 1);
+      dy0 = Math.max(0, Math.floor(region.y0 / scaleY) - 1);
+      dy1 = Math.min(canvas.height - 1, Math.ceil((region.y1 + 1) / scaleY) + 1);
+      if (dx0 > dx1 || dy0 > dy1) return;
+    }
+    const w = dx1 - dx0 + 1;
+    const h = dy1 - dy0 + 1;
+
+    const imgData = ctx.createImageData(w, h);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const mx = Math.floor((x + dx0) * scaleX);
+        const my = Math.floor((y + dy0) * scaleY);
         const val = m.get(mx, my);
-        const idx = (y * canvas.width + x) * 4;
+        const idx = (y * w + x) * 4;
         if (val < 128) {
           // Foreground - tint green
           imgData.data[idx] = 125;
@@ -417,8 +427,13 @@ export function Canvas() {
         }
       }
     }
-    ctx.putImageData(imgData, 0, 0);
-  }, [showMask, maskVersion, displayRect]);
+    ctx.putImageData(imgData, dx0, dy0);
+  }, [displayRect]);
+
+  // Full overlay redraw on structural changes (toggle, stroke end, resize)
+  useEffect(() => {
+    redrawMaskOverlay();
+  }, [showMask, maskVersion, displayRect, redrawMaskOverlay]);
 
   // Fast-forward effects from time 0 to targetTime by simulating in steps
   function simulateToTime(targetTime: number) {
@@ -440,176 +455,75 @@ export function Canvas() {
     let t = 0;
     while (t < targetTime) {
       const dt = Math.min(step, targetTime - t);
-      compositeFrame(effectsRef.current, dt, t, mask, grid, asciiTextRef.current);
+      compositeFrame(effectsRef.current, dt, t, mask, grid, asciiTextRef.current, { buildText: false });
       t += dt;
     }
+  }
+
+  function getEffectLayout(): EffectCanvasLayout | null {
+    const pre = asciiRef.current;
+    if (!pre) return null;
+    if (!preStyleRef.current) {
+      const style = getComputedStyle(pre);
+      preStyleRef.current = {
+        font: style.font || `${grid.fontSize}px monospace`,
+        padLeft: parseFloat(style.paddingLeft) || 0,
+        padTop: parseFloat(style.paddingTop) || 0,
+      };
+    }
+    const cached = preStyleRef.current;
+    return {
+      padLeft: cached.padLeft,
+      padTop: cached.padTop,
+      charW: grid.charW,
+      charH: grid.charH,
+      font: cached.font,
+    };
   }
 
   function renderGlow(glowCells: GlowCell[], count: number) {
     const canvas = glowCanvasRef.current;
     if (!canvas) return;
     if (displayRect.w === 0 || displayRect.h === 0) return;
+    const pre = asciiRef.current;
 
     const dpr = window.devicePixelRatio || 1;
     const w = displayRect.w;
     const h = displayRect.h;
-
     const newW = w * dpr;
     const newH = h * dpr;
-    const needsResize = canvas.width !== newW || canvas.height !== newH;
-    if (needsResize) {
+    if (canvas.width !== newW || canvas.height !== newH) {
       canvas.width = newW;
       canvas.height = newH;
     }
-
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-
-    if (needsResize) {
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
 
-    const effectPre = effectPreRef.current;
-    const pre = asciiRef.current;
-
-    if (count === 0) {
-      if (effectPre) effectPre.textContent = "";
-      // Restore base text (undo any holes punched by previous frames)
-      if (pre && asciiTextRef.current) pre.textContent = asciiTextRef.current;
-      return;
-    }
-
-    const preStyle = pre ? getComputedStyle(pre) : null;
-    const computedFont = pre ? preStyle!.font : `${grid.fontSize}px monospace`;
-    if (computedFont !== lastFontRef.current) {
-      ctx.font = computedFont;
-      lastFontRef.current = computedFont;
-    }
-    ctx.textBaseline = "top";
-    const padLeft = preStyle ? parseFloat(preStyle.paddingLeft) || 0 : 8;
-    const padTop = preStyle ? parseFloat(preStyle.paddingTop) || 0 : 10;
-
-    let prevHex = "";
-    let cR = 0, cG = 0, cB = 0;
-
-    // Separate cells: asciiOverlay → DOM pre, regular → canvas fillText
-    const { cols, rows: gridRows } = grid;
-    const overlayGrid = new Map<number, Map<number, { char: string; color: string; brightness: number }>>();
-    let hasOverlay = false;
-
-    // Canvas pass 1: glow sprites for ALL cells
-    for (let i = 0; i < count; i++) {
-      const cell = glowCells[i];
-      const gr = cell.glowRadius ?? 18;
-
-      if (gr > 0) {
-        const cx = padLeft + cell.col * grid.charW + grid.charW * 0.5;
-        const cy = padTop + cell.row * grid.charH + grid.charH * 0.5;
-        if (cell.color !== prevHex) {
-          prevHex = cell.color;
-          cR = parseInt(cell.color.slice(1, 3), 16) || 0;
-          cG = parseInt(cell.color.slice(3, 5), 16) || 0;
-          cB = parseInt(cell.color.slice(5, 7), 16) || 0;
-        }
-        const sprite = getGlowSprite(cR, cG, cB, gr, cell.brightness);
-        ctx.drawImage(sprite, cx - gr, cy - gr, gr * 2, gr * 2);
-      }
-
-      // asciiOverlay cells → DOM overlay (pixel-perfect alignment with base text)
-      // regular cells → canvas fillText (good enough for glowing effect chars)
-      if (cell.asciiOverlay) {
-        let rowMap = overlayGrid.get(cell.row);
-        if (!rowMap) { rowMap = new Map(); overlayGrid.set(cell.row, rowMap); }
-        const existing = rowMap.get(cell.col);
-        if (!existing || cell.brightness > existing.brightness) {
-          rowMap.set(cell.col, { char: cell.char, color: cell.color, brightness: cell.brightness });
-          hasOverlay = true;
+    // applyToAscii cells punch holes in the base <pre>. Diffed: the DOM is
+    // only touched on frames where the hole set actually changed.
+    const holes = showEffects ? collectHoles(glowCells, count, grid.cols) : new Set<number>();
+    if (holesChanged(prevHolesRef.current, holes)) {
+      prevHolesRef.current = holes;
+      if (pre && asciiTextRef.current) {
+        if (holes.size > 0) {
+          pre.textContent = punchHoles(asciiTextRef.current.split("\n"), holes, grid.cols, grid.rows);
+          basePunchedRef.current = true;
+        } else if (basePunchedRef.current) {
+          pre.textContent = asciiTextRef.current;
+          basePunchedRef.current = false;
         }
       }
     }
 
-    // DOM overlay: ALL effect characters in a <pre> for pixel-perfect alignment.
-    // Only asciiOverlay cells punch holes in base text. Skip when hidden.
-    if (!effectPre || !showEffects) {
-      if (effectPre) effectPre.textContent = "";
-      if (pre && asciiTextRef.current) pre.textContent = asciiTextRef.current;
-      return;
-    }
+    if (count === 0 || !showEffects) return;
 
-    // Collect regular (non-asciiOverlay) cells into the overlay grid too
-    // Track asciiOverlay positions separately for hole-punching
-    const holeSet = new Set<number>(); // row * cols + col
-    for (let i = 0; i < count; i++) {
-      const cell = glowCells[i];
-      if (cell.asciiOverlay) {
-        holeSet.add(cell.row * cols + cell.col);
-        continue; // already in overlayGrid
-      }
-      let rowMap = overlayGrid.get(cell.row);
-      if (!rowMap) { rowMap = new Map(); overlayGrid.set(cell.row, rowMap); }
-      const existing = rowMap.get(cell.col);
-      if (!existing || cell.brightness > existing.brightness) {
-        rowMap.set(cell.col, { char: cell.char, color: cell.color, brightness: cell.brightness });
-        hasOverlay = true;
-      }
-    }
-
-    if (!hasOverlay) {
-      effectPre.textContent = "";
-      if (pre && asciiTextRef.current) pre.textContent = asciiTextRef.current;
-      return;
-    }
-
-    function safeColor(c: string): string {
-      return c.replace(/[^a-fA-F0-9#(),.\s%a-z]/g, "");
-    }
-
-    // Build effect HTML — batch spaces, only span for active cells
-    const baseLines = asciiTextRef.current.split("\n");
-    const effectParts: string[] = [];
-    const emptyRow = " ".repeat(cols);
-
-    for (let r = 0; r < gridRows; r++) {
-      if (r > 0) effectParts.push("\n");
-      const rowMap = overlayGrid.get(r);
-      if (!rowMap) { effectParts.push(emptyRow); continue; }
-      const entries = Array.from(rowMap.entries()).sort((a, b) => a[0] - b[0]);
-      let c = 0;
-      for (const [col, cell] of entries) {
-        if (col > c) effectParts.push(" ".repeat(col - c));
-        c = col + 1;
-        const a = Math.min(1, cell.brightness * 0.95).toFixed(2);
-        const ch = cell.char === "<" ? "&lt;" : cell.char === "&" ? "&amp;" : cell.char;
-        const sc = safeColor(cell.color);
-        effectParts.push(`<span style="color:${sc};opacity:${a};text-shadow:0 0 8px ${sc},0 0 16px ${sc}">${ch}</span>`);
-      }
-      if (c < cols) effectParts.push(" ".repeat(cols - c));
-    }
-    effectPre.innerHTML = effectParts.join("");
-
-    // Hole-punch base text only at asciiOverlay positions
-    if (holeSet.size > 0 && pre) {
-      const baseParts: string[] = [];
-      for (let r = 0; r < gridRows; r++) {
-        if (r > 0) baseParts.push("\n");
-        const baseLine = baseLines[r] || "";
-        let rowHasHoles = false;
-        for (let c = 0; c < cols; c++) {
-          if (holeSet.has(r * cols + c)) { rowHasHoles = true; break; }
-        }
-        if (!rowHasHoles) {
-          baseParts.push(baseLine.padEnd(cols, " ").slice(0, cols));
-        } else {
-          for (let c = 0; c < cols; c++) {
-            baseParts.push(holeSet.has(r * cols + c) ? " " : (baseLine[c] || " "));
-          }
-        }
-      }
-      pre.textContent = baseParts.join("");
-    } else if (pre && asciiTextRef.current) {
-      pre.textContent = asciiTextRef.current;
-    }
+    // All effect glyphs render on the canvas (same as the export pipeline) —
+    // the old per-cell <span> + text-shadow DOM overlay was the editor's
+    // single largest frame cost.
+    const layout = getEffectLayout();
+    if (layout) drawEffectCells(ctx, glowCells, count, layout);
   }
 
   // Animation loop
@@ -623,7 +537,7 @@ export function Canvas() {
     if (prefersReducedMotion) {
       if (grid.cols > 0) {
         const currentMask = maskGridRef.current;
-        const result = compositeFrame(effectsRef.current, 0, currentTime, currentMask, grid, asciiTextRef.current);
+        const result = compositeFrame(effectsRef.current, 0, currentTime, currentMask, grid, asciiTextRef.current, { buildText: false });
         renderGlow(result.glowCells, result.glowCount);
       }
       return;
@@ -682,11 +596,12 @@ export function Canvas() {
         animationTime.current = now;
 
         if (grid.cols > 0) {
+          const renderStart = performance.now();
           const currentMask = maskGridRef.current;
-          const result = compositeFrame(effectsRef.current, dt, now, currentMask, grid, asciiTextRef.current);
+          const result = compositeFrame(effectsRef.current, dt, now, currentMask, grid, asciiTextRef.current, { buildText: false });
           perfCells.current = result.glowCount;
           renderGlow(result.glowCells, result.glowCount);
-          perfGlow.current = result.glowCount;
+          perfGlow.current += performance.now() - renderStart;
         }
 
         // Update perf overlay (~2x/sec to avoid overhead)
@@ -694,10 +609,12 @@ export function Canvas() {
         const perfNow = performance.now();
         if (perfNow - perfLastUpdate.current > 500) {
           const fps = Math.round(perfFrames.current / ((perfNow - perfLastUpdate.current) / 1000));
-          const frameMs = ((perfNow - perfLastUpdate.current) / perfFrames.current).toFixed(1);
+          // render = actual simulate+draw cost; the rest of the frame interval is idle/vsync
+          const renderMs = (perfGlow.current / perfFrames.current).toFixed(1);
           perfFrames.current = 0;
+          perfGlow.current = 0;
           perfLastUpdate.current = perfNow;
-          setPerfText(`${fps} fps · ${frameMs}ms · ${perfCells.current} cells · ${perfGlow.current} glow`);
+          setPerfText(`${fps} fps · render ${renderMs}ms · ${perfCells.current} cells`);
         }
       } catch (err) {
         console.error("[txtfx] animation tick error:", err);
@@ -718,6 +635,10 @@ export function Canvas() {
       }
       isMounted = false;
     };
+    // currentTime/simulateToTime/renderGlow/setCurrentTime are read via refs or
+    // store getState inside the loop; depending on them would restart the
+    // animation loop every frame and break resume-from-pause.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing, grid, playbackDuration, playbackLoop, playbackFps]);
 
   // When scrubbing while paused or editing effects while paused, re-render.
@@ -749,8 +670,11 @@ export function Canvas() {
 
     // Re-render current state (dt=0 so no state advancement)
     const currentMask = maskGridRef.current;
-    const result = compositeFrame(effectsRef.current, 0, currentTime, currentMask, grid, asciiTextRef.current);
+    const result = compositeFrame(effectsRef.current, 0, currentTime, currentMask, grid, asciiTextRef.current, { buildText: false });
     renderGlow(result.glowCells, result.glowCount);
+    // renderGlow/simulateToTime are recreated each render but behaviorally
+    // stable; including them would re-simulate (and re-randomize) on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing, currentTime, grid, sceneEffects]);
 
   // Auto-play when effects are added
@@ -758,6 +682,9 @@ export function Canvas() {
     if (sceneEffects.length > 0 && imageUrl && !playing) {
       setPlaying(true);
     }
+    // Deliberately NOT depending on `playing`: this should fire only when an
+    // effect is added or the image changes, not re-trigger on pause.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sceneEffects.length, imageUrl]);
 
   useEffect(() => {
@@ -796,11 +723,26 @@ export function Canvas() {
     const r = Math.floor(brushSize * scaleX);
     const ry = Math.floor(brushSize * scaleY);
 
+    // Union of dirty rects from all brush stamps in this stroke segment
+    let dirty: MaskDirtyRect | null = null;
+    const addDirty = (rect: MaskDirtyRect | null) => {
+      if (!rect) return;
+      const current = dirty;
+      dirty = current
+        ? {
+            x0: Math.min(current.x0, rect.x0),
+            y0: Math.min(current.y0, rect.y0),
+            x1: Math.max(current.x1, rect.x1),
+            y1: Math.max(current.y1, rect.y1),
+          }
+        : rect;
+    };
+
     const prev = lastPaintRef.current;
     if (prev) {
       // Bresenham line interpolation between last and current point
-      let dx = Math.abs(x - prev.x);
-      let dy = Math.abs(y - prev.y);
+      const dx = Math.abs(x - prev.x);
+      const dy = Math.abs(y - prev.y);
       const sx = prev.x < x ? 1 : -1;
       const sy = prev.y < y ? 1 : -1;
       let err = dx - dy;
@@ -810,7 +752,7 @@ export function Canvas() {
       let steps = 0;
       while (true) {
         if (steps % step === 0 || (cx === x && cy === y)) {
-          m.paintBrush(cx, cy, r, value, maskFeather, ry);
+          addDirty(m.paintBrush(cx, cy, r, value, maskFeather, ry));
         }
         if (cx === x && cy === y) break;
         const e2 = 2 * err;
@@ -820,11 +762,16 @@ export function Canvas() {
         if (steps > 100000) break; // safety
       }
     } else {
-      m.paintBrush(x, y, r, value, maskFeather, ry);
+      addDirty(m.paintBrush(x, y, r, value, maskFeather, ry));
     }
 
     lastPaintRef.current = { x, y };
-    bumpMaskVersion();
+    if (dirty) {
+      // Incremental: only the touched grid cells + overlay pixels update.
+      // maskVersion is bumped once at stroke end (handlePointerUp).
+      incrementalMaskRef.current?.updateRect(dirty);
+      redrawMaskOverlay(dirty);
+    }
   }
 
   function handlePointerDown(e: React.PointerEvent<HTMLDivElement>) {
@@ -870,6 +817,9 @@ export function Canvas() {
     if (isPaintingRef.current) {
       // Snapshot mask state at end of stroke for undo/redo
       pushMaskHistory();
+      // One version bump per stroke: triggers autosave + a consistency
+      // rebuild of the mask grid (the stroke itself updated incrementally)
+      bumpMaskVersion();
     }
     isPaintingRef.current = false;
     lastPaintRef.current = null;
@@ -997,19 +947,6 @@ export function Canvas() {
               inset: 0,
               zIndex: 2,
               visibility: showAscii ? "visible" : "hidden",
-            }}
-          />
-          <pre
-            ref={effectPreRef}
-            className="ascii-overlay"
-            style={{
-              position: "absolute",
-              inset: 0,
-              color: "transparent",
-              opacity: 1,
-              zIndex: 3,
-              pointerEvents: "none",
-              visibility: showEffects ? "visible" : "hidden",
             }}
           />
           <canvas

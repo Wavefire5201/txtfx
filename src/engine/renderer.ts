@@ -1,4 +1,4 @@
-import type { AsciiEffect, GridInfo, MaskGrid, EffectCell } from "./effects/types";
+import type { AsciiEffect, GridInfo, MaskGrid } from "./effects/types";
 import type { MaskRegion } from "./effects/types";
 
 export interface ActiveEffect {
@@ -28,6 +28,15 @@ export interface CompositeResult {
   glowCount: number;
 }
 
+export interface CompositeOptions {
+  /**
+   * Build the plain-text frame (cols×rows string). The terminal/text export
+   * paths need it; the editor preview and canvas export paths only consume
+   * glowCells, and the join costs ~a 12k-char string per frame.
+   */
+  buildText?: boolean;
+}
+
 // Reusable buffers - resized only when grid dimensions change
 let _cachedCols = 0;
 let _cachedRows = 0;
@@ -45,7 +54,7 @@ const _charIndex = new Map<string, number>();
 const _colorTable: string[] = [];
 const _colorLookup = new Map<string, number>();
 
-let _glowPool: GlowCell[] = [];
+const _glowPool: GlowCell[] = [];
 let _glowCount = 0;
 
 /**
@@ -58,8 +67,10 @@ export function compositeFrame(
   time: number,
   mask: MaskGrid,
   grid: GridInfo,
-  baseText?: string
+  baseText?: string,
+  options: CompositeOptions = {}
 ): CompositeResult {
+  const buildText = options.buildText ?? true;
   const { cols, rows } = grid;
   const total = cols * rows;
 
@@ -172,23 +183,26 @@ export function compositeFrame(
     }
   }
 
-  // Build plain text output using pre-allocated buffer
-  const needed = cols * rows + (rows - 1);
-  if (_textBuf.length < needed) {
-    _textBuf = new Array(needed);
-  }
-  let pos = 0;
-  for (let r = 0; r < rows; r++) {
-    if (r > 0) _textBuf[pos++] = "\n";
-    const base = r * cols;
-    for (let c = 0; c < cols; c++) {
-      _textBuf[pos++] = chars[charMap[base + c]];
+  // Build plain text output using pre-allocated buffer (opt-in)
+  let text = "";
+  if (buildText) {
+    const needed = cols * rows + (rows - 1);
+    if (_textBuf.length < needed) {
+      _textBuf = new Array(needed);
     }
+    let pos = 0;
+    for (let r = 0; r < rows; r++) {
+      if (r > 0) _textBuf[pos++] = "\n";
+      const base = r * cols;
+      for (let c = 0; c < cols; c++) {
+        _textBuf[pos++] = chars[charMap[base + c]];
+      }
+    }
+    const savedLen = _textBuf.length;
+    _textBuf.length = pos;
+    text = _textBuf.join("");
+    _textBuf.length = savedLen;
   }
-  const savedLen = _textBuf.length;
-  _textBuf.length = pos;
-  const text = _textBuf.join("");
-  _textBuf.length = savedLen;
 
   // Collect cells with color for glow rendering (pooled)
   _glowCount = 0;
@@ -217,4 +231,55 @@ export function compositeFrame(
   }
 
   return { text, glowCells: _glowPool, glowCount: _glowCount };
+}
+
+// ---------------------------------------------------------------------------
+// Hole-punching helpers (applyToAscii cells replace base text chars).
+// Pure functions so the editor's frame loop logic is unit-testable.
+// ---------------------------------------------------------------------------
+
+/** Collects base-text hole positions (row*cols+col) from composited cells. */
+export function collectHoles(glowCells: GlowCell[], glowCount: number, cols: number): Set<number> {
+  const holes = new Set<number>();
+  for (let i = 0; i < glowCount; i++) {
+    const cell = glowCells[i];
+    if (cell.asciiOverlay) holes.add(cell.row * cols + cell.col);
+  }
+  return holes;
+}
+
+/** True when the hole set differs from the previous frame's. */
+export function holesChanged(prev: Set<number>, next: Set<number>): boolean {
+  if (prev.size !== next.size) return true;
+  for (const idx of next) {
+    if (!prev.has(idx)) return true;
+  }
+  return false;
+}
+
+/**
+ * Returns base text with hole positions replaced by spaces, normalized to
+ * cols×rows (lines padded/truncated like the renderer's layout).
+ */
+export function punchHoles(baseLines: string[], holes: Set<number>, cols: number, rows: number): string {
+  const parts: string[] = [];
+  for (let r = 0; r < rows; r++) {
+    if (r > 0) parts.push("\n");
+    const line = baseLines[r] || "";
+    let rowHasHoles = false;
+    for (let c = 0; c < cols; c++) {
+      if (holes.has(r * cols + c)) {
+        rowHasHoles = true;
+        break;
+      }
+    }
+    if (!rowHasHoles) {
+      parts.push(line.padEnd(cols, " ").slice(0, cols));
+    } else {
+      for (let c = 0; c < cols; c++) {
+        parts.push(holes.has(r * cols + c) ? " " : (line[c] || " "));
+      }
+    }
+  }
+  return parts.join("");
 }
