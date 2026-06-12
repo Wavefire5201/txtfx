@@ -160,8 +160,9 @@ declare const SCENE: {
         const instance = createEffect(cfg.type);
         instance.init(grid, cfg.params || {});
         // Feed base text to text-dependent effects
-        if ("setBaseText" in instance && typeof (instance as any).setBaseText === "function") {
-          (instance as any).setBaseText(baseText);
+        const withBaseText = instance as AsciiEffect & { setBaseText?: (text: string) => void };
+        if (typeof withBaseText.setBaseText === "function") {
+          withBaseText.setBaseText(baseText);
         }
         activeEffects.push({
           instance,
@@ -186,7 +187,10 @@ declare const SCENE: {
     ];
   }
 
-  // Glow sprite cache (inline for bundled IIFE)
+  // Glow sprite cache (inline for bundled IIFE). FIFO-bounded — gradient color
+  // mode generates a new lerped color per frame, so without a cap this Map
+  // would grow without bound during long playback in embedded scenes.
+  const _GLOW_CACHE_MAX = 4096;
   const _glowCache = new Map<string, HTMLCanvasElement>();
   function _getGlowSprite(cR: number, cG: number, cB: number, radius: number, brightness: number): HTMLCanvasElement {
     const qB = Math.round(brightness * 15) / 15;
@@ -204,6 +208,10 @@ declare const SCENE: {
     g.addColorStop(1, `rgba(${cR},${cG},${cB},0)`);
     c.fillStyle = g;
     c.fillRect(0, 0, qR * 2, qR * 2);
+    if (_glowCache.size >= _GLOW_CACHE_MAX) {
+      const oldest = _glowCache.keys().next().value;
+      if (oldest !== undefined) _glowCache.delete(oldest);
+    }
     _glowCache.set(key, s);
     return s;
   }
@@ -213,8 +221,12 @@ declare const SCENE: {
   let _charBuf: string[] = [];
   let _bufSize = 0;
 
-  // Animation
+  // Animation. A single rAF handle lives at module scope so that re-entering
+  // animate() (e.g. on resize) cancels the previous loop instead of stacking
+  // a second one — stacked loops multiply CPU use and double-advance time.
+  let activeRaf = 0;
   function animate() {
+    cancelAnimationFrame(activeRaf);
     initEffects();
     const t0 = performance.now();
     const dur = SCENE.playback.duration;
@@ -222,12 +234,11 @@ declare const SCENE: {
     const fpsInterval = 1 / (SCENE.playback.fps || 30);
     let lastT = 0;
     let lastFrame = 0;
-    let raf = 0;
     const dpr = window.devicePixelRatio || 1;
 
     function tick() {
       const wallNow = performance.now() / 1000;
-      if (wallNow - lastFrame < fpsInterval) { raf = requestAnimationFrame(tick); return; }
+      if (wallNow - lastFrame < fpsInterval) { activeRaf = requestAnimationFrame(tick); return; }
       lastFrame = wallNow;
 
       const el = (performance.now() - t0) / 1000;
@@ -379,9 +390,9 @@ declare const SCENE: {
         }
       }
 
-      raf = requestAnimationFrame(tick);
+      activeRaf = requestAnimationFrame(tick);
     }
-    raf = requestAnimationFrame(tick);
+    activeRaf = requestAnimationFrame(tick);
   }
 
   buildAscii(() => decodeMask(animate));
