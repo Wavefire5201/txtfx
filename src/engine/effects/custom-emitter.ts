@@ -1,5 +1,6 @@
-import type { AsciiEffect, GridInfo, MaskGrid, EffectCell, ControlDescriptor } from "./types";
-import { type ColorMode, pickColor, readColors, readColorMode, colorControls } from "./color-util";
+import type { AsciiEffect, GridInfo, MaskGrid, ControlDescriptor } from "./types";
+import { type ColorMode, pickColorPacked, readColorsPacked, readColorMode, colorControls } from "./color-util";
+import { type CellBuffer } from "../cell-buffer";
 
 interface Particle {
   c: number;
@@ -9,7 +10,7 @@ interface Particle {
   life: number;
   maxLife: number;
   charIdx: number;
-  color: string;
+  color: number;
   colorIdx: number;
 }
 
@@ -18,7 +19,7 @@ export class CustomEmitterEffect implements AsciiEffect {
   private grid: GridInfo = { cols: 0, rows: 0, charW: 0, charH: 0, fontSize: 0 };
   private particles: Particle[] = [];
 
-  private chars = "*+.";
+  private codes: number[] = [];
   private spawnRate = 10;
   private direction = -90; // degrees, -90 = up
   private spread = 30;
@@ -29,10 +30,9 @@ export class CustomEmitterEffect implements AsciiEffect {
   private spawnY = 1.0;
   private spawnAccum = 0;
   private spawnCounter = 0;
-  private colors: string[] = ["#ffffff"];
+  private colors: number[] = [];
   private colorMode: ColorMode = "random";
   private glowRadius = 14;
-  private _cells: EffectCell[] = [];
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
     const newSpawnX = (params.spawnX as number) ?? 0.5;
@@ -44,7 +44,8 @@ export class CustomEmitterEffect implements AsciiEffect {
       || newSpawnY !== this.spawnY;
 
     this.grid = grid;
-    this.chars = (params.chars as string) ?? "*+.";
+    const str = (params.chars as string) ?? "*+.";
+    this.codes = [...str].map((c) => c.codePointAt(0)!);
     this.spawnRate = (params.spawnRate as number) ?? 10;
     this.direction = (params.direction as number) ?? -90;
     this.spread = (params.spread as number) ?? 30;
@@ -53,7 +54,7 @@ export class CustomEmitterEffect implements AsciiEffect {
     this.lifetime = (params.lifetime as number) ?? 2;
     this.spawnX = newSpawnX;
     this.spawnY = newSpawnY;
-    this.colors = readColors(params, "#ffffff");
+    this.colors = readColorsPacked(params, "#ffffff");
     this.colorMode = readColorMode(params);
     this.glowRadius = (params.glowRadius as number) ?? 14;
 
@@ -64,9 +65,8 @@ export class CustomEmitterEffect implements AsciiEffect {
     }
   }
 
-  update(dt: number, _time: number, _mask: MaskGrid): EffectCell[] {
+  update(dt: number, _time: number, _mask: MaskGrid, out: CellBuffer): void {
     const { cols, rows } = this.grid;
-    const cells = this._cells; cells.length = 0;
 
     // Spawn with fractional accumulation
     this.spawnAccum += this.spawnRate * dt;
@@ -85,8 +85,8 @@ export class CustomEmitterEffect implements AsciiEffect {
         vr: Math.sin(angle) * spd,
         life: 0,
         maxLife: this.lifetime * (0.5 + Math.random()),
-        charIdx: Math.floor(Math.random() * this.chars.length),
-        color: pickColor(this.colors, this.colorMode === "gradient" ? "random" : this.colorMode, idx),
+        charIdx: Math.floor(Math.random() * this.codes.length),
+        color: pickColorPacked(this.colors, this.colorMode === "gradient" ? "random" : this.colorMode, idx),
         colorIdx: idx,
       });
       this.spawnCounter++;
@@ -109,23 +109,14 @@ export class CustomEmitterEffect implements AsciiEffect {
       const c = Math.round(p.c);
       if (r >= 0 && r < rows && c >= 0 && c < cols) {
         const t = p.life / p.maxLife;
-        const charProgress = Math.min(Math.floor(t * this.chars.length), this.chars.length - 1);
+        const charProgress = Math.min(Math.floor(t * this.codes.length), this.codes.length - 1);
         // For gradient mode, use lifecycle position
         const color = this.colorMode === "gradient"
-          ? pickColor(this.colors, this.colorMode, p.colorIdx, t)
+          ? pickColorPacked(this.colors, this.colorMode, p.colorIdx, t)
           : p.color;
-        cells.push({
-          row: r,
-          col: c,
-          char: this.chars[charProgress],
-          brightness: 1 - t,
-          color,
-          glowRadius: this.glowRadius,
-        });
+        out.push(r, c, this.codes[charProgress], 1 - t, color, this.glowRadius);
       }
     }
-
-    return cells;
   }
 
   getControls(): ControlDescriptor[] {

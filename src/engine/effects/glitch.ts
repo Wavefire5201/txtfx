@@ -1,7 +1,9 @@
-import type { AsciiEffect, GridInfo, MaskGrid, EffectCell, ControlDescriptor } from "./types";
-import { type ColorMode, pickColor, readColors, readColorMode, colorControls } from "./color-util";
+import type { AsciiEffect, GridInfo, MaskGrid, ControlDescriptor } from "./types";
+import { type ColorMode, pickColorPacked, readColorsPacked, readColorMode, colorControls } from "./color-util";
+import { type CellBuffer } from "../cell-buffer";
 
 const GLITCH_CHARS = "@#$%&*!?/\\|[]{}()<>~^";
+const GLITCH_CODES: number[] = [...GLITCH_CHARS].map((c) => c.codePointAt(0)!);
 
 interface GlitchBlock {
   col: number;
@@ -10,7 +12,7 @@ interface GlitchBlock {
   h: number;
   life: number;
   maxLife: number;
-  color: string;
+  color: number;
 }
 
 export class GlitchEffect implements AsciiEffect {
@@ -23,10 +25,9 @@ export class GlitchEffect implements AsciiEffect {
   private frequency = 0.5;
   private blockSize = 8;
   private density = 0.6;
-  private colors: string[] = ["#ff3366"];
+  private colors: number[] = [];
   private colorMode: ColorMode = "random";
   private glowRadius = 0;
-  private _cells: EffectCell[] = [];
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
     const needsRegen = this.grid.cols === 0
@@ -38,7 +39,7 @@ export class GlitchEffect implements AsciiEffect {
     this.blockSize = (params.blockSize as number) ?? 8;
     // Legacy `intensity` is supported as a fallback so older saved scenes keep working
     this.density = (params.density as number) ?? (params.intensity as number) ?? 0.6;
-    this.colors = readColors(params, "#ff3366");
+    this.colors = readColorsPacked(params, "#ff3366");
     this.colorMode = readColorMode(params);
     this.glowRadius = (params.glowRadius as number) ?? 0;
 
@@ -49,9 +50,8 @@ export class GlitchEffect implements AsciiEffect {
     }
   }
 
-  update(dt: number, time: number, _mask: MaskGrid): EffectCell[] {
+  update(dt: number, time: number, _mask: MaskGrid, out: CellBuffer): void {
     const { cols, rows } = this.grid;
-    const cells = this._cells; cells.length = 0;
 
     // Detect loop wrap: if time went backward, reset nextSpawn to the new time
     if (time < this.lastTime) {
@@ -72,7 +72,7 @@ export class GlitchEffect implements AsciiEffect {
         h,
         life: 0,
         maxLife: 0.05 + Math.random() * 0.2,
-        color: pickColor(this.colors, this.colorMode === "gradient" ? "random" : this.colorMode, idx),
+        color: pickColorPacked(this.colors, this.colorMode === "gradient" ? "random" : this.colorMode, idx),
       });
       this.spawnCounter++;
       this.nextSpawn = time + (1 / this.frequency) * (0.5 + Math.random());
@@ -90,13 +90,11 @@ export class GlitchEffect implements AsciiEffect {
       for (let r = b.row; r < b.row + b.h && r < rows; r++) {
         for (let c = b.col; c < b.col + b.w && c < cols; c++) {
           if (Math.random() > this.density) continue;
-          const ch = GLITCH_CHARS[Math.floor(Math.random() * GLITCH_CHARS.length)];
-          cells.push({ row: r, col: c, char: ch, brightness: 0.8 + Math.random() * 0.2, color: b.color, glowRadius: this.glowRadius });
+          const chCode = GLITCH_CODES[Math.floor(Math.random() * GLITCH_CODES.length)];
+          out.push(r, c, chCode, 0.8 + Math.random() * 0.2, b.color, this.glowRadius);
         }
       }
     }
-
-    return cells;
   }
 
   getControls(): ControlDescriptor[] {

@@ -1,10 +1,12 @@
-import type { AsciiEffect, GridInfo, MaskGrid, EffectCell, ControlDescriptor } from "./types";
-import { type ColorMode, pickColor, readColors, readColorMode, colorControls, lerpColor } from "./color-util";
+import type { AsciiEffect, GridInfo, MaskGrid, ControlDescriptor } from "./types";
+import { type ColorMode, pickColorPacked, readColorsPacked, readColorMode, colorControls, lerpPackedColor, WHITE_PACKED } from "./color-util";
+import { type CellBuffer } from "../cell-buffer";
 
 const MATRIX_CHARS = "0123456789abcdefABCDEF:.<>+*";
+const MATRIX_CODES: number[] = [...MATRIX_CHARS].map((c) => c.codePointAt(0)!);
 
-function randomChar(): string {
-  return MATRIX_CHARS[Math.floor(Math.random() * MATRIX_CHARS.length)];
+function randomCode(): number {
+  return MATRIX_CODES[Math.floor(Math.random() * MATRIX_CODES.length)];
 }
 
 interface Column {
@@ -14,8 +16,8 @@ interface Column {
   length: number;     // trail length in rows
   delay: number;      // seconds before respawn after completing
   waiting: number;    // current wait timer
-  chars: string[];    // fixed char per row, occasionally cycled
-  color: string;      // assigned color for this column
+  chars: number[];    // fixed code point per row, occasionally cycled
+  color: number;      // assigned color for this column
   colorIdx: number;
 }
 
@@ -26,11 +28,10 @@ export class MatrixEffect implements AsciiEffect {
   private density = 0.4;
   private speedMin = 5;
   private speedMax = 14;
-  private colors: string[] = ["#00ff41"];
+  private colors: number[] = [];
   private colorMode: ColorMode = "random";
   private glowRadius = 10;
   private spawnCounter = 0;
-  private _cells: EffectCell[] = [];
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
     const newDensity = (params.density as number) ?? 0.4;
@@ -42,7 +43,7 @@ export class MatrixEffect implements AsciiEffect {
     this.density = newDensity;
     this.speedMin = (params.speedMin as number) ?? 5;
     this.speedMax = (params.speedMax as number) ?? 14;
-    this.colors = readColors(params, "#00ff41");
+    this.colors = readColorsPacked(params, "#00ff41");
     this.colorMode = readColorMode(params);
     this.glowRadius = (params.glowRadius as number) ?? 10;
     this.grid = grid;
@@ -70,17 +71,16 @@ export class MatrixEffect implements AsciiEffect {
       length: 8 + Math.floor(Math.random() * 14),
       delay: 0.5 + Math.random() * 3,
       waiting: 0,
-      chars: Array.from({ length: rows }, randomChar),
-      color: pickColor(this.colors, this.colorMode === "gradient" ? "random" : this.colorMode, idx),
+      chars: Array.from({ length: rows }, randomCode),
+      color: pickColorPacked(this.colors, this.colorMode === "gradient" ? "random" : this.colorMode, idx),
       colorIdx: idx,
     };
     this.spawnCounter++;
     return col;
   }
 
-  update(dt: number, _time: number, _mask: MaskGrid): EffectCell[] {
+  update(dt: number, _time: number, _mask: MaskGrid, out: CellBuffer): void {
     const { cols, rows } = this.grid;
-    const cells = this._cells; cells.length = 0;
 
     for (const col of this.columns) {
       // Waiting to respawn
@@ -94,12 +94,12 @@ export class MatrixEffect implements AsciiEffect {
           col.delay = 0.5 + Math.random() * 3;
           // Assign a new random column position
           col.col = Math.floor(Math.random() * cols);
-          col.chars = Array.from({ length: rows }, randomChar);
+          col.chars = Array.from({ length: rows }, randomCode);
           // Re-pick color on respawn
           const idx = this.colorMode === "random"
             ? Math.floor(Math.random() * this.colors.length)
             : this.spawnCounter;
-          col.color = pickColor(this.colors, this.colorMode === "gradient" ? "random" : this.colorMode, idx);
+          col.color = pickColorPacked(this.colors, this.colorMode === "gradient" ? "random" : this.colorMode, idx);
           col.colorIdx = idx;
           this.spawnCounter++;
         }
@@ -114,7 +114,7 @@ export class MatrixEffect implements AsciiEffect {
       // Cycle a random char occasionally (skip when paused / dt=0)
       if (dt > 0 && Math.random() < 0.05) {
         const idx = Math.floor(Math.random() * col.chars.length);
-        col.chars[idx] = randomChar();
+        col.chars[idx] = randomCode();
       }
 
       // Render the trail
@@ -134,17 +134,15 @@ export class MatrixEffect implements AsciiEffect {
 
         // For gradient mode, gradient down the column trail
         let color = this.colorMode === "gradient"
-          ? pickColor(this.colors, this.colorMode, col.colorIdx, t)
+          ? pickColorPacked(this.colors, this.colorMode, col.colorIdx, t)
           : col.color;
 
         // Brighten the leading char toward white for the classic Matrix head highlight
-        if (i === 0) color = lerpColor(color, "#ffffff", 0.6);
+        if (i === 0) color = lerpPackedColor(color, WHITE_PACKED, 0.6);
 
-        cells.push({ row: r, col: c, char: col.chars[r], brightness, color, glowRadius: this.glowRadius });
+        out.push(r, c, col.chars[r], brightness, color, this.glowRadius);
       }
     }
-
-    return cells;
   }
 
   getControls(): ControlDescriptor[] {

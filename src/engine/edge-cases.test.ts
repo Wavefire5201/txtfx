@@ -1,9 +1,17 @@
 import { describe, it, expect, afterEach } from "vitest";
 import { createEffect } from "./effects";
 import { compositeFrame, type ActiveEffect } from "./renderer";
-import { pickColor } from "./effects/color-util";
+import { pickColor, packHex } from "./effects/color-util";
+import { CellBuffer, cellBufferToArray, NO_COLOR, NO_GLOW, type ExtractedCell } from "./cell-buffer";
 import type { AsciiEffect, ControlDescriptor, EffectCell, EffectType, GridInfo, MaskGrid } from "./effects/types";
 import { seedMathRandom } from "@/test/fixtures";
+
+const SHARED_BUF = new CellBuffer();
+function update(fx: AsciiEffect, dt: number, time: number, mask: MaskGrid): ExtractedCell[] {
+  SHARED_BUF.clear();
+  fx.update(dt, time, mask, SHARED_BUF);
+  return cellBufferToArray(SHARED_BUF);
+}
 
 // ---------------------------------------------------------------------------
 // Edge-case catalog — extreme grids, degenerate params, and boundary times.
@@ -26,8 +34,13 @@ class StubEffect implements AsciiEffect {
   type = "stub";
   cells: EffectCell[] = [];
   init() {}
-  update(): EffectCell[] {
-    return this.cells;
+  update(_dt: number, _time: number, _mask: MaskGrid, out: CellBuffer): void {
+    for (const c of this.cells) {
+      out.push(
+        c.row, c.col, c.char.codePointAt(0)!, c.brightness ?? 0.5,
+        c.color ? packHex(c.color) : NO_COLOR, c.glowRadius ?? NO_GLOW,
+      );
+    }
   }
   getControls(): ControlDescriptor[] {
     return [];
@@ -72,7 +85,7 @@ describe("extreme grids", () => {
     }
 
     for (let i = 0; i < 30; i++) {
-      const cells = fx.update(0.016, i * 0.016, MASK);
+      const cells = update(fx, 0.016, i * 0.016, MASK);
       for (const cell of cells) {
         expect(cell.row).toBeGreaterThanOrEqual(0);
         expect(cell.row).toBeLessThan(rows);
@@ -89,7 +102,7 @@ describe("degenerate params", () => {
     const fx = createEffect(type);
     fx.init(makeGrid(20, 10), { colors: [] });
     for (let i = 0; i < 30; i++) {
-      expect(() => fx.update(0.016, i * 0.016, MASK)).not.toThrow();
+      expect(() => update(fx, 0.016, i * 0.016, MASK)).not.toThrow();
     }
   });
 
@@ -104,7 +117,7 @@ describe("degenerate params", () => {
     const fx = createEffect(type);
     fx.init(grid, {});
     // Simulate a tab coming back from background: one giant step
-    const cells = fx.update(10, 10, MASK);
+    const cells = update(fx, 10, 10, MASK);
     for (const cell of cells) {
       expect(cell.row).toBeGreaterThanOrEqual(0);
       expect(cell.row).toBeLessThan(grid.rows);
@@ -160,26 +173,22 @@ describe("mask boundary at exactly 0.5", () => {
 });
 
 describe("custom-emitter with multi-code-unit characters", () => {
-  // TODO(soa-cell-buffers phase): chars are indexed by UTF-16 code unit, so an
-  // emoji like "🔥" (2 code units) is emitted as lone surrogate halves. The SoA
-  // refactor must store code points (codePointAt / Uint32Array) instead. This
-  // test pins the current (lossy but non-crashing) behavior.
-  it("does not crash and currently emits single UTF-16 code units (lone surrogates)", () => {
+  // CellBuffer stores Unicode CODE POINTS, so emoji survive intact (the old
+  // EffectCell path indexed UTF-16 units and emitted lone surrogate halves).
+  it("emits whole emoji, never surrogate halves", () => {
     restoreRandom = seedMathRandom(7);
     const fx = createEffect("custom-emitter");
     fx.init(makeGrid(40, 20), { chars: "🔥💧", spawnRate: 100 });
 
-    let sawSurrogateHalf = false;
+    let sawEmoji = false;
     for (let i = 0; i < 60; i++) {
-      const cells = fx.update(0.016, i * 0.016, MASK);
+      const cells = update(fx, 0.016, i * 0.016, MASK);
       for (const cell of cells) {
-        expect(cell.char.length).toBe(1);
-        const code = cell.char.charCodeAt(0);
-        if (code >= 0xd800 && code <= 0xdfff) sawSurrogateHalf = true;
+        expect(["🔥", "💧"]).toContain(cell.char);
+        sawEmoji = true;
       }
     }
-    // "🔥💧" consists ONLY of surrogate pairs, so every emitted char is a half.
-    expect(sawSurrogateHalf).toBe(true);
+    expect(sawEmoji).toBe(true);
   });
 });
 
@@ -188,10 +197,10 @@ describe("repeated dt=0 at arbitrary times", () => {
     restoreRandom = seedMathRandom(7);
     const fx = createEffect(type);
     fx.init(makeGrid(40, 20), {});
-    for (let i = 0; i < 120; i++) fx.update(0.016, i * 0.016, MASK);
+    for (let i = 0; i < 120; i++) update(fx, 0.016, i * 0.016, MASK);
     // Paused scrubbing hammering the same timestamp must not throw or drift bounds
     for (let i = 0; i < 20; i++) {
-      const cells = fx.update(0, 1.92, MASK);
+      const cells = update(fx, 0, 1.92, MASK);
       for (const cell of cells) {
         expect(cell.row).toBeGreaterThanOrEqual(0);
         expect(cell.row).toBeLessThan(20);

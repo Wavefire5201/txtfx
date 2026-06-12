@@ -1,12 +1,18 @@
-import type { AsciiEffect, GridInfo, MaskGrid, EffectCell, ControlDescriptor } from "./types";
-import { type ColorMode, pickColor, readColors, readColorMode, colorControls } from "./color-util";
+import type { AsciiEffect, GridInfo, MaskGrid, ControlDescriptor } from "./types";
+import { type ColorMode, pickColorPacked, readColorsPacked, readColorMode, colorControls } from "./color-util";
+import { type CellBuffer } from "../cell-buffer";
+
+// Character code points
+const CODE_PIPE = "|".codePointAt(0)!;
+const CODE_COLON = ":".codePointAt(0)!;
+const CODE_DOT = ".".codePointAt(0)!;
 
 interface Drop {
   col: number;
   y: number;
   speed: number;
   length: number;
-  color: string;
+  color: number;
 }
 
 export class RainEffect implements AsciiEffect {
@@ -19,10 +25,9 @@ export class RainEffect implements AsciiEffect {
   private wind = 0;
   private spawnAccum = 0;
   private spawnCounter = 0;
-  private colors: string[] = ["#88bbee"];
+  private colors: number[] = [];
   private colorMode: ColorMode = "random";
   private glowRadius = 10;
-  private _cells: EffectCell[] = [];
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
     const needsRegen = this.grid.cols === 0
@@ -33,7 +38,7 @@ export class RainEffect implements AsciiEffect {
     this.speedMin = (params.speedMin as number) ?? 15;
     this.speedMax = (params.speedMax as number) ?? 35;
     this.wind = (params.wind as number) ?? 0;
-    this.colors = readColors(params, "#88bbee");
+    this.colors = readColorsPacked(params, "#88bbee");
     this.colorMode = readColorMode(params);
     this.glowRadius = (params.glowRadius as number) ?? 10;
     this.grid = grid;
@@ -45,9 +50,8 @@ export class RainEffect implements AsciiEffect {
     }
   }
 
-  update(dt: number, _time: number, _mask: MaskGrid): EffectCell[] {
+  update(dt: number, _time: number, _mask: MaskGrid, out: CellBuffer): void {
     const { cols, rows } = this.grid;
-    const cells = this._cells; cells.length = 0;
 
     // Spawn new drops with fractional accumulation
     this.spawnAccum += cols * this.density * dt;
@@ -62,7 +66,7 @@ export class RainEffect implements AsciiEffect {
         y: -1,
         speed: this.speedMin + Math.random() * (this.speedMax - this.speedMin),
         length: 2 + Math.floor(Math.random() * 3),
-        color: pickColor(this.colors, this.colorMode === "gradient" ? "random" : this.colorMode, idx),
+        color: pickColorPacked(this.colors, this.colorMode === "gradient" ? "random" : this.colorMode, idx),
       });
       this.spawnCounter++;
     }
@@ -84,12 +88,10 @@ export class RainEffect implements AsciiEffect {
       for (let j = 0; j < d.length; j++) {
         const r = headRow - j;
         if (r < 0 || r >= rows || col < 0 || col >= cols) continue;
-        const ch = j === 0 ? "|" : j === 1 ? ":" : ".";
-        cells.push({ row: r, col, char: ch, brightness: 1 - j / d.length, color: d.color, glowRadius: this.glowRadius });
+        const ch = j === 0 ? CODE_PIPE : j === 1 ? CODE_COLON : CODE_DOT;
+        out.push(r, col, ch, 1 - j / d.length, d.color, this.glowRadius);
       }
     }
-
-    return cells;
   }
 
   getControls(): ControlDescriptor[] {

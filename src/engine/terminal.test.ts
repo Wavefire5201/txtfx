@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { CellBuffer, cellBufferToArray } from "./cell-buffer";
 import type { SceneData } from "./scene";
 import { createDefaultScene } from "./scene";
 import { fitTerminalBaseText, imagePixelsToTerminalBaseText, prepareTerminalContext } from "./terminal";
@@ -52,8 +53,9 @@ describe("terminal render context", () => {
       applyToAscii: false,
     });
 
-    const cells = context.effects[0].instance.update(0, 0.01, context.mask);
-    expect(cells.some((cell) => cell.char === "a")).toBe(true);
+    const buf = new CellBuffer();
+    context.effects[0].instance.update(0, 0.01, context.mask, buf);
+    expect(cellBufferToArray(buf).some((cell) => cell.char === "a")).toBe(true);
   });
 
   it("maps image luminance pixels to terminal ASCII", () => {

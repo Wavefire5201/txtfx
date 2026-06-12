@@ -1,5 +1,6 @@
-import type { AsciiEffect, GridInfo, MaskGrid, EffectCell, ControlDescriptor } from "./types";
-import { type ColorMode, pickColor, readColors, readColorMode, colorControls } from "./color-util";
+import type { AsciiEffect, GridInfo, MaskGrid, ControlDescriptor } from "./types";
+import { type ColorMode, pickColorPacked, readColorsPacked, readColorMode, colorControls } from "./color-util";
+import { type CellBuffer } from "../cell-buffer";
 
 export class TypewriterEffect implements AsciiEffect {
   type = "typewriter";
@@ -7,16 +8,15 @@ export class TypewriterEffect implements AsciiEffect {
   private baseChars: string[][] = [];
   private speed = 80; // chars per second
   private cursor = "_";
-  private colors: string[] = ["#ffffff"];
+  private colors: number[] = [];
   private colorMode: ColorMode = "random";
   private glowRadius = 12;
-  private _cells: EffectCell[] = [];
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
     this.grid = grid;
     this.speed = (params.speed as number) ?? 80;
     this.cursor = (params.cursor as string) ?? "_";
-    this.colors = readColors(params, "#ffffff");
+    this.colors = readColorsPacked(params, "#ffffff");
     this.colorMode = readColorMode(params);
     this.glowRadius = (params.glowRadius as number) ?? 12;
   }
@@ -25,13 +25,12 @@ export class TypewriterEffect implements AsciiEffect {
     this.baseChars = text.split("\n").map((line) => [...line]);
   }
 
-  update(_dt: number, time: number, _mask: MaskGrid): EffectCell[] {
+  update(_dt: number, time: number, _mask: MaskGrid, out: CellBuffer): void {
     const { cols, rows } = this.grid;
-    if (this.baseChars.length === 0) return [];
+    if (this.baseChars.length === 0) return;
 
     const totalChars = cols * rows;
     const revealed = Math.min(Math.floor(time * this.speed), totalChars);
-    const cells = this._cells; cells.length = 0;
 
     // Blinking cursor (blink every 0.5s)
     const cursorVisible = Math.floor(time * 2) % 2 === 0;
@@ -44,11 +43,12 @@ export class TypewriterEffect implements AsciiEffect {
         if (count >= revealed) {
           // Place cursor at the reveal edge
           if (!cursorPlaced && cursorVisible) {
-            const cursorColor = pickColor(this.colors, this.colorMode, count);
-            cells.push({ row: r, col: c, char: this.cursor, brightness: 1, color: cursorColor, glowRadius: this.glowRadius });
+            const cursorColor = pickColorPacked(this.colors, this.colorMode, count);
+            const cursorCode = this.cursor.codePointAt(0)!;
+            out.push(r, c, cursorCode, 1, cursorColor, this.glowRadius);
             cursorPlaced = true;
           }
-          return cells;
+          return;
         }
         const ch = row[c];
         if (ch !== " ") {
@@ -57,9 +57,10 @@ export class TypewriterEffect implements AsciiEffect {
           const brightness = charAge < 0.05 ? 1.0 : charAge < 0.2 ? 0.85 : 0.7;
           // Cycle through colors per character
           const color = this.colorMode === "gradient"
-            ? pickColor(this.colors, this.colorMode, count, count / totalChars)
-            : pickColor(this.colors, this.colorMode, count);
-          cells.push({ row: r, col: c, char: ch, brightness, color, glowRadius: charAge < 0.1 ? this.glowRadius : undefined });
+            ? pickColorPacked(this.colors, this.colorMode, count, count / totalChars)
+            : pickColorPacked(this.colors, this.colorMode, count);
+          const glowRadius = charAge < 0.1 ? this.glowRadius : undefined;
+          out.push(r, c, ch.codePointAt(0)!, brightness, color, glowRadius);
         }
         count++;
       }
@@ -70,12 +71,11 @@ export class TypewriterEffect implements AsciiEffect {
       const lastRow = Math.min(rows, this.baseChars.length) - 1;
       const lastCol = Math.min(cols, this.baseChars[lastRow]?.length ?? 0);
       if (lastCol < cols) {
-        const cursorColor = pickColor(this.colors, this.colorMode, count);
-        cells.push({ row: lastRow, col: lastCol, char: this.cursor, brightness: 1, color: cursorColor, glowRadius: this.glowRadius });
+        const cursorColor = pickColorPacked(this.colors, this.colorMode, count);
+        const cursorCode = this.cursor.codePointAt(0)!;
+        out.push(lastRow, lastCol, cursorCode, 1, cursorColor, this.glowRadius);
       }
     }
-
-    return cells;
   }
 
   getControls(): ControlDescriptor[] {

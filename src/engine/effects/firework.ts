@@ -1,5 +1,11 @@
-import type { AsciiEffect, GridInfo, MaskGrid, EffectCell, ControlDescriptor } from "./types";
-import { type ColorMode, pickColor, readColors, readColorMode, colorControls } from "./color-util";
+import type { AsciiEffect, GridInfo, MaskGrid, ControlDescriptor } from "./types";
+import { type ColorMode, pickColorPacked, readColorsPacked, readColorMode, colorControls } from "./color-util";
+import { type CellBuffer } from "../cell-buffer";
+
+const CHAR_AT = "@".codePointAt(0)!;
+const CHAR_PLUS = "+".codePointAt(0)!;
+const CHAR_DOT = ".".codePointAt(0)!;
+const CHAR_STAR = "*".codePointAt(0)!;
 
 interface Particle {
   c: number;
@@ -8,9 +14,9 @@ interface Particle {
   vr: number;
   life: number;
   maxLife: number;
-  char: string;
+  char: number;
   type: "main" | "flash" | "spark";
-  color: string;
+  color: number;
 }
 
 interface Burst {
@@ -28,11 +34,10 @@ export class FireworkEffect implements AsciiEffect {
   private intervalMax = 5;
   private particleCount = 50;
   private maxRadius = 20;
-  private colors: string[] = ["#ffcc00"];
+  private colors: number[] = [];
   private colorMode: ColorMode = "random";
   private glowRadius = 18;
   private spawnCounter = 0;
-  private _cells: EffectCell[] = [];
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
     const needsRegen = this.grid.cols === 0
@@ -43,7 +48,7 @@ export class FireworkEffect implements AsciiEffect {
     this.intervalMax = (params.intervalMax as number) ?? 5;
     this.particleCount = (params.particleCount as number) ?? 50;
     this.maxRadius = (params.maxRadius as number) ?? 20;
-    this.colors = readColors(params, "#ffcc00");
+    this.colors = readColorsPacked(params, "#ffcc00");
     this.colorMode = readColorMode(params);
     this.glowRadius = (params.glowRadius as number) ?? 18;
     this.grid = grid;
@@ -55,9 +60,8 @@ export class FireworkEffect implements AsciiEffect {
     }
   }
 
-  update(dt: number, time: number, _mask: MaskGrid): EffectCell[] {
+  update(dt: number, time: number, _mask: MaskGrid, out: CellBuffer): void {
     const { cols, rows } = this.grid;
-    const cells = this._cells; cells.length = 0;
 
     // Detect loop wrap: if time went backward, reset nextSpawn to new time + interval
     if (time < this.lastTime) {
@@ -91,12 +95,12 @@ export class FireworkEffect implements AsciiEffect {
         const r = Math.round(p.r);
         const c = Math.round(p.c);
         if (r >= 0 && r < rows && c >= 0 && c < cols) {
-          const ch = t < 0.3 ? p.char : t < 0.6 ? "+" : ".";
+          const chCode = t < 0.3 ? p.char : t < 0.6 ? CHAR_PLUS : CHAR_DOT;
           // For gradient mode, whole burst shifts color together based on burst age
           const color = this.colorMode === "gradient"
-            ? pickColor(this.colors, this.colorMode, 0, Math.min(1, burst.age / 1.5))
+            ? pickColorPacked(this.colors, this.colorMode, 0, Math.min(1, burst.age / 1.5))
             : p.color;
-          cells.push({ row: r, col: c, char: ch, brightness, color, glowRadius: this.glowRadius });
+          out.push(r, c, chCode, brightness, color, this.glowRadius);
         }
       }
 
@@ -105,8 +109,6 @@ export class FireworkEffect implements AsciiEffect {
         this.bursts.pop();
       }
     }
-
-    return cells;
   }
 
   private spawnBurst(cols: number, rows: number): void {
@@ -118,7 +120,7 @@ export class FireworkEffect implements AsciiEffect {
     const burstIdx = this.colorMode === "random"
       ? Math.floor(Math.random() * this.colors.length)
       : this.spawnCounter;
-    const burstColor = pickColor(this.colors, this.colorMode === "gradient" ? "random" : this.colorMode, burstIdx);
+    const burstColor = pickColorPacked(this.colors, this.colorMode === "gradient" ? "random" : this.colorMode, burstIdx);
     this.spawnCounter++;
 
     // Main radial particles
@@ -135,9 +137,9 @@ export class FireworkEffect implements AsciiEffect {
         vr: Math.sin(angle) * speed * 0.45, // vertical squash
         life: 0,
         maxLife: 0.7 + Math.random() * 1,
-        char: "@",
+        char: CHAR_AT,
         type: "main",
-        color: pickColor(this.colors, this.colorMode === "gradient" ? "random" : this.colorMode, idx),
+        color: pickColorPacked(this.colors, this.colorMode === "gradient" ? "random" : this.colorMode, idx),
       });
     }
 
@@ -151,7 +153,7 @@ export class FireworkEffect implements AsciiEffect {
         vr: Math.sin(angle) * speed * 0.45,
         life: 0,
         maxLife: 0.2 + Math.random() * 0.3,
-        char: "*",
+        char: CHAR_STAR,
         type: "flash",
         color: burstColor,
       });
@@ -168,7 +170,7 @@ export class FireworkEffect implements AsciiEffect {
         vr: 1 + Math.random() * 3,
         life: 0,
         maxLife: 0.8 + Math.random() * 1.2,
-        char: ".",
+        char: CHAR_DOT,
         type: "spark",
         color: burstColor,
       });

@@ -1,5 +1,6 @@
-import type { AsciiEffect, GridInfo, MaskGrid, EffectCell, ControlDescriptor } from "./types";
-import { type ColorMode, pickColor, readColors, readColorMode, colorControls } from "./color-util";
+import type { AsciiEffect, GridInfo, MaskGrid, ControlDescriptor } from "./types";
+import { type ColorMode, pickColorPacked, readColorsPacked, readColorMode, colorControls } from "./color-util";
+import { type CellBuffer } from "../cell-buffer";
 
 export class ScanlineEffect implements AsciiEffect {
   type = "scanline";
@@ -8,11 +9,10 @@ export class ScanlineEffect implements AsciiEffect {
   private width = 2;
   private brightness = 1;
   private count = 1;
-  private colors: string[] = ["#88ccff"];
+  private colors: number[] = [];
   private colorMode: ColorMode = "random";
   private glowRadius = 16;
   private chars = "=-~";
-  private _cells: EffectCell[] = [];
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
     this.grid = grid;
@@ -20,15 +20,14 @@ export class ScanlineEffect implements AsciiEffect {
     this.width = (params.width as number) ?? 2;
     this.brightness = (params.brightness as number) ?? 1;
     this.count = (params.count as number) ?? 1;
-    this.colors = readColors(params, "#88ccff");
+    this.colors = readColorsPacked(params, "#88ccff");
     this.colorMode = readColorMode(params);
     this.glowRadius = (params.glowRadius as number) ?? 16;
     this.chars = (params.chars as string) ?? "=-~";
   }
 
-  update(_dt: number, time: number, _mask: MaskGrid): EffectCell[] {
+  update(_dt: number, time: number, _mask: MaskGrid, out: CellBuffer): void {
     const { cols, rows } = this.grid;
-    const cells = this._cells; cells.length = 0;
 
     for (let s = 0; s < this.count; s++) {
       // Each scanline is offset evenly across the grid height
@@ -36,7 +35,7 @@ export class ScanlineEffect implements AsciiEffect {
       const headRow = ((time * this.speed + phase) % (rows + this.width)) - this.width;
 
       // Pick color per scanline
-      const baseColor = pickColor(this.colors, this.colorMode === "gradient" ? "random" : this.colorMode,
+      const baseColor = pickColorPacked(this.colors, this.colorMode === "gradient" ? "random" : this.colorMode,
         this.colorMode === "random" ? Math.floor(Math.random() * this.colors.length) : s);
 
       for (let w = 0; w < this.width; w++) {
@@ -47,6 +46,7 @@ export class ScanlineEffect implements AsciiEffect {
         const t = w / this.width;
         const b = this.brightness * (1 - t * 0.6);
         const ch = this.chars[Math.min(w, this.chars.length - 1)] || "=";
+        const chCode = ch.codePointAt(0)!;
         // Glow only on the leading row — emitting one glow sprite per cell × width
         // tanks performance on wide grids
         const gr = w === 0 ? this.glowRadius : 0;
@@ -57,14 +57,12 @@ export class ScanlineEffect implements AsciiEffect {
           const finalB = Math.max(0.1, b + flicker);
           // For gradient mode, gradient across width
           const color = this.colorMode === "gradient"
-            ? pickColor(this.colors, this.colorMode, 0, c / cols)
+            ? pickColorPacked(this.colors, this.colorMode, 0, c / cols)
             : baseColor;
-          cells.push({ row: r, col: c, char: ch, brightness: finalB, color, glowRadius: gr });
+          out.push(r, c, chCode, finalB, color, gr);
         }
       }
     }
-
-    return cells;
   }
 
   getControls(): ControlDescriptor[] {

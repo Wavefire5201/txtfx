@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { ActiveEffect } from "../renderer";
+import { CellBuffer, NO_COLOR, NO_GLOW } from "../cell-buffer";
+import { packHex } from "../effects/color-util";
 import type { AsciiEffect, ControlDescriptor, EffectCell, GridInfo, MaskGrid } from "../effects/types";
 import {
   calculateCharAdvance,
@@ -26,8 +28,13 @@ class StubEffect implements AsciiEffect {
   type = "stub";
   constructor(private readonly cells: EffectCell[]) {}
   init() {}
-  update(): EffectCell[] {
-    return this.cells;
+  update(_dt: number, _time: number, _mask: MaskGrid, out: CellBuffer): void {
+    for (const c of this.cells) {
+      out.push(
+        c.row, c.col, c.char.codePointAt(0)!, c.brightness ?? 0.5,
+        c.color ? packHex(c.color) : NO_COLOR, c.glowRadius ?? NO_GLOW,
+      );
+    }
   }
   getControls(): ControlDescriptor[] {
     return [];

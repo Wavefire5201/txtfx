@@ -1,3 +1,5 @@
+import type { CellBuffer } from "../cell-buffer";
+
 export interface GridInfo {
   cols: number;
   rows: number;
@@ -15,6 +17,10 @@ export interface MaskGrid {
   get(row: number, col: number): number;
 }
 
+/**
+ * Readable cell shape used at boundaries and in tests. Hot paths use
+ * CellBuffer (struct-of-arrays with packed colors/code points) instead.
+ */
 export interface EffectCell {
   row: number;
   col: number;
@@ -38,7 +44,8 @@ export interface ControlDescriptor {
 export interface AsciiEffect {
   type: string;
   init(grid: GridInfo, params: Record<string, unknown>): void;
-  update(dt: number, time: number, mask: MaskGrid): EffectCell[];
+  /** Writes this frame's cells into `out` (cleared by the caller). */
+  update(dt: number, time: number, mask: MaskGrid, out: CellBuffer): void;
   getControls(): ControlDescriptor[];
 }
 

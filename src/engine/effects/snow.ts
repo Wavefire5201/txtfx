@@ -1,5 +1,9 @@
-import type { AsciiEffect, GridInfo, MaskGrid, EffectCell, ControlDescriptor } from "./types";
-import { type ColorMode, pickColor, readColors, readColorMode, colorControls } from "./color-util";
+import type { AsciiEffect, GridInfo, MaskGrid, ControlDescriptor } from "./types";
+import { type ColorMode, pickColorPacked, readColorsPacked, readColorMode, colorControls } from "./color-util";
+import { type CellBuffer } from "../cell-buffer";
+
+const SNOW_CHARS = ["*", "·", "."];
+const SNOW_CODES: number[] = [...SNOW_CHARS].map((c) => c.codePointAt(0)!);
 
 interface Flake {
   col: number;
@@ -7,12 +11,10 @@ interface Flake {
   speed: number;
   drift: number;
   phase: number;
-  char: string;
-  color: string;
+  code: number;
+  color: number;
   baseBrightness: number;
 }
-
-const SNOW_CHARS = ["*", "\u00B7", "."];
 
 export class SnowEffect implements AsciiEffect {
   type = "snow";
@@ -25,10 +27,9 @@ export class SnowEffect implements AsciiEffect {
   private wind = 0;
   private spawnAccum = 0;
   private spawnCounter = 0;
-  private colors: string[] = ["#ffffff"];
+  private colors: number[] = [];
   private colorMode: ColorMode = "random";
   private glowRadius = 12;
-  private _cells: EffectCell[] = [];
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
     const needsRegen = this.grid.cols === 0
@@ -40,7 +41,7 @@ export class SnowEffect implements AsciiEffect {
     this.speedMax = (params.speedMax as number) ?? 8;
     this.driftAmount = (params.driftAmount as number) ?? 2;
     this.wind = (params.wind as number) ?? 0;
-    this.colors = readColors(params, "#ffffff");
+    this.colors = readColorsPacked(params, "#ffffff");
     this.colorMode = readColorMode(params);
     this.glowRadius = (params.glowRadius as number) ?? 12;
     this.grid = grid;
@@ -52,9 +53,8 @@ export class SnowEffect implements AsciiEffect {
     }
   }
 
-  update(dt: number, time: number, _mask: MaskGrid): EffectCell[] {
+  update(dt: number, time: number, _mask: MaskGrid, out: CellBuffer): void {
     const { cols, rows } = this.grid;
-    const cells = this._cells; cells.length = 0;
 
     this.spawnAccum += cols * this.density * dt;
     const spawnCount = Math.floor(this.spawnAccum);
@@ -69,8 +69,8 @@ export class SnowEffect implements AsciiEffect {
         speed: this.speedMin + Math.random() * (this.speedMax - this.speedMin),
         drift: this.driftAmount * (Math.random() - 0.5) * 2,
         phase: Math.random() * Math.PI * 2,
-        char: SNOW_CHARS[Math.floor(Math.random() * SNOW_CHARS.length)],
-        color: pickColor(this.colors, this.colorMode === "gradient" ? "random" : this.colorMode, idx),
+        code: SNOW_CODES[Math.floor(Math.random() * SNOW_CODES.length)],
+        color: pickColorPacked(this.colors, this.colorMode === "gradient" ? "random" : this.colorMode, idx),
         baseBrightness: 0.55 + Math.random() * 0.35,
       });
       this.spawnCounter++;
@@ -92,11 +92,9 @@ export class SnowEffect implements AsciiEffect {
       if (r >= 0 && r < rows && c >= 0 && c < cols) {
         // Fade in over the first 2 rows so flakes don't pop into existence
         const fadeIn = r < 2 ? (r + 1) / 3 : 1;
-        cells.push({ row: r, col: c, char: f.char, brightness: f.baseBrightness * fadeIn, color: f.color, glowRadius: this.glowRadius });
+        out.push(r, c, f.code, f.baseBrightness * fadeIn, f.color, this.glowRadius);
       }
     }
-
-    return cells;
   }
 
   getControls(): ControlDescriptor[] {

@@ -1,5 +1,12 @@
-import type { AsciiEffect, GridInfo, MaskGrid, EffectCell, ControlDescriptor } from "./types";
-import { type ColorMode, pickColor, readColors, readColorMode, colorControls } from "./color-util";
+import type { AsciiEffect, GridInfo, MaskGrid, ControlDescriptor } from "./types";
+import { type ColorMode, pickColorPacked, readColorsPacked, readColorMode, colorControls } from "./color-util";
+import { type CellBuffer } from "../cell-buffer";
+
+// Character code points
+const CODE_STAR = "*".codePointAt(0)!;
+const CODE_PLUS = "+".codePointAt(0)!;
+const CODE_DOT = ".".codePointAt(0)!;
+const CODE_AT = "@".codePointAt(0)!;
 
 interface Trail {
   c: number;
@@ -14,7 +21,7 @@ interface MeteorState {
   maxAge: number;
   speed: number;
   trail: Trail[];
-  color: string;
+  color: number;
 }
 
 export class MeteorEffect implements AsciiEffect {
@@ -33,10 +40,9 @@ export class MeteorEffect implements AsciiEffect {
   private speedMin = 22;
   private speedMax = 36;
   private trailLength = 25;
-  private colors: string[] = ["#ffaa33"];
+  private colors: number[] = [];
   private colorMode: ColorMode = "random";
   private glowRadius = 14;
-  private _cells: EffectCell[] = [];
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
     const needsRegen = this.grid.cols === 0
@@ -49,7 +55,7 @@ export class MeteorEffect implements AsciiEffect {
     this.speedMin = (params.speedMin as number) ?? 22;
     this.speedMax = (params.speedMax as number) ?? 36;
     this.trailLength = (params.trailLength as number) ?? 25;
-    this.colors = readColors(params, "#ffaa33");
+    this.colors = readColorsPacked(params, "#ffaa33");
     this.colorMode = readColorMode(params);
     this.glowRadius = (params.glowRadius as number) ?? 14;
     this.dc = Math.cos((this.angle * Math.PI) / 180);
@@ -63,9 +69,8 @@ export class MeteorEffect implements AsciiEffect {
     }
   }
 
-  update(dt: number, time: number, _mask: MaskGrid): EffectCell[] {
+  update(dt: number, time: number, _mask: MaskGrid, out: CellBuffer): void {
     const { cols, rows } = this.grid;
-    const cells = this._cells; cells.length = 0;
 
     // Detect loop wrap: if time went backward, reset nextSpawn to new time + interval
     if (time < this.lastTime) {
@@ -84,7 +89,7 @@ export class MeteorEffect implements AsciiEffect {
         maxAge: 2.0 + Math.random() * 1.2,
         speed: this.speedMin + Math.random() * (this.speedMax - this.speedMin),
         trail: [],
-        color: pickColor(this.colors, this.colorMode === "gradient" ? "random" : this.colorMode, idx),
+        color: pickColorPacked(this.colors, this.colorMode === "gradient" ? "random" : this.colorMode, idx),
       });
       this.spawnCounter++;
       this.nextSpawn = time + this.intervalMin + Math.random() * (this.intervalMax - this.intervalMin);
@@ -115,25 +120,23 @@ export class MeteorEffect implements AsciiEffect {
       for (let ti = 0; ti < m.trail.length; ti++) {
         const p = m.trail[ti];
         if (p.age > 0.7) continue;
-        const ch = p.age < 0.12 ? "*" : p.age < 0.35 ? "+" : ".";
+        const ch = p.age < 0.12 ? CODE_STAR : p.age < 0.35 ? CODE_PLUS : CODE_DOT;
         const brightness = 1 - p.age / 0.7;
         // For gradient mode, gradient along trail length
         const color = this.colorMode === "gradient"
-          ? pickColor(this.colors, this.colorMode, 0, ti / m.trail.length)
+          ? pickColorPacked(this.colors, this.colorMode, 0, ti / m.trail.length)
           : m.color;
         if (p.r >= 0 && p.r < rows && p.c >= 0 && p.c < cols) {
-          cells.push({ row: p.r, col: p.c, char: ch, brightness, color, glowRadius: this.glowRadius });
+          out.push(p.r, p.c, ch, brightness, color, this.glowRadius);
         }
       }
       if (m.age < m.maxAge && !offscreen) {
         const mr = Math.round(m.r), mc = Math.round(m.c);
         if (mr >= 0 && mr < rows && mc >= 0 && mc < cols) {
-          cells.push({ row: mr, col: mc, char: "@", brightness: 1, color: m.color, glowRadius: this.glowRadius });
+          out.push(mr, mc, CODE_AT, 1, m.color, this.glowRadius);
         }
       }
     }
-
-    return cells;
   }
 
   getControls(): ControlDescriptor[] {

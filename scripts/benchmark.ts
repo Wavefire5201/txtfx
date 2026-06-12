@@ -6,6 +6,7 @@
  */
 
 import { compositeFrame, type ActiveEffect } from "../src/engine/renderer";
+import { CellBuffer } from "../src/engine/cell-buffer";
 import { createEffect } from "../src/engine/effects";
 import type { EffectType, GridInfo, MaskGrid } from "../src/engine/effects/types";
 
@@ -136,7 +137,7 @@ for (const [cols, rows] of GRID_SIZES) {
     const fx = createEffect("twinkle");
     fx.init(grid, { count: cellCount });
     // Warm up the effect so it has cells ready
-    fx.update(0.016, 0, mask);
+    fx.update(0.016, 0, mask, new CellBuffer());
 
     const active: ActiveEffect = {
       instance: fx,
@@ -144,7 +145,7 @@ for (const [cols, rows] of GRID_SIZES) {
       enabled: true,
       timelineStart: 0,
       timelineEnd: null,
-      loop: false,
+      mode: "one-shot",
       applyToAscii: false,
     };
 
@@ -171,7 +172,8 @@ for (const type of ALL_EFFECTS) {
   const fx = createEffect(type);
   fx.init(benchGrid, {});
   // Warm up particle effects
-  for (let i = 0; i < 20; i++) fx.update(0.016, i * 0.016, benchMask);
+  const warmBuf = new CellBuffer();
+  for (let i = 0; i < 20; i++) { warmBuf.clear(); fx.update(0.016, i * 0.016, benchMask, warmBuf); }
 
   let t = 0.5;
   effectResults.push(
@@ -180,7 +182,8 @@ for (const type of ALL_EFFECTS) {
       "120x60",
       () => {
         t += 0.016;
-        fx.update(0.016, t, benchMask);
+        warmBuf.clear();
+        fx.update(0.016, t, benchMask, warmBuf);
       },
     )
   );

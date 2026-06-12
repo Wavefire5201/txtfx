@@ -1,5 +1,10 @@
-import type { AsciiEffect, GridInfo, MaskGrid, EffectCell, ControlDescriptor } from "./types";
-import { type ColorMode, pickColor, readColors, readColorMode, colorControls } from "./color-util";
+import type { AsciiEffect, GridInfo, MaskGrid, ControlDescriptor } from "./types";
+import { type ColorMode, pickColorPacked, readColorsPacked, readColorMode, colorControls } from "./color-util";
+import { type CellBuffer } from "../cell-buffer";
+
+const FIRE_RAMP = ["@", "#", "*", "+", ".", " "];
+const FIRE_RAMP_CODES: number[] = FIRE_RAMP.map((c) => c.codePointAt(0)!);
+const CODE_SPACE = " ".codePointAt(0)!;
 
 interface Ember {
   col: number;
@@ -7,11 +12,9 @@ interface Ember {
   speed: number;
   life: number;
   maxLife: number;
-  color: string;
+  color: number;
   colorIdx: number;
 }
-
-const FIRE_RAMP = ["@", "#", "*", "+", ".", " "];
 
 export class FireEffect implements AsciiEffect {
   type = "fire";
@@ -23,10 +26,9 @@ export class FireEffect implements AsciiEffect {
   private flicker = 0;
   private spawnAccum = 0;
   private spawnCounter = 0;
-  private colors: string[] = ["#ff6622"];
+  private colors: number[] = [];
   private colorMode: ColorMode = "random";
   private glowRadius = 16;
-  private _cells: EffectCell[] = [];
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
     const needsRegen = this.grid.cols === 0
@@ -37,7 +39,7 @@ export class FireEffect implements AsciiEffect {
     this.height = (params.height as number) ?? 0.3;
     this.spread = (params.spread as number) ?? 1.5;
     this.flicker = (params.flicker as number) ?? 0;
-    this.colors = readColors(params, "#ff6622");
+    this.colors = readColorsPacked(params, "#ff6622");
     this.colorMode = readColorMode(params);
     this.glowRadius = (params.glowRadius as number) ?? 16;
     this.grid = grid;
@@ -49,9 +51,8 @@ export class FireEffect implements AsciiEffect {
     }
   }
 
-  update(dt: number, time: number, _mask: MaskGrid): EffectCell[] {
+  update(dt: number, time: number, _mask: MaskGrid, out: CellBuffer): void {
     const { cols, rows } = this.grid;
-    const cells = this._cells; cells.length = 0;
     const baseRow = rows - 1;
 
     // Spawn embers with fractional accumulation. Flicker modulates spawn rate
@@ -72,7 +73,7 @@ export class FireEffect implements AsciiEffect {
         speed: 5 + Math.random() * 10,
         life: 0,
         maxLife: 0.5 + Math.random() * 1.5 * this.height,
-        color: pickColor(this.colors, this.colorMode === "gradient" ? "random" : this.colorMode, idx),
+        color: pickColorPacked(this.colors, this.colorMode === "gradient" ? "random" : this.colorMode, idx),
         colorIdx: idx,
       });
       this.spawnCounter++;
@@ -91,22 +92,20 @@ export class FireEffect implements AsciiEffect {
       }
 
       const t = e.life / e.maxLife;
-      const rampIdx = Math.min(Math.floor(t * (FIRE_RAMP.length - 1)), FIRE_RAMP.length - 1);
-      const ch = FIRE_RAMP[rampIdx];
-      if (ch === " ") continue;
+      const rampIdx = Math.min(Math.floor(t * (FIRE_RAMP_CODES.length - 1)), FIRE_RAMP_CODES.length - 1);
+      const code = FIRE_RAMP_CODES[rampIdx];
+      if (code === CODE_SPACE) continue;
 
       const r = Math.round(e.y);
       const c = Math.round(e.col);
       if (r >= 0 && r < rows && c >= 0 && c < cols) {
         // For gradient mode, use lifecycle position
         const color = this.colorMode === "gradient"
-          ? pickColor(this.colors, this.colorMode, e.colorIdx, t)
+          ? pickColorPacked(this.colors, this.colorMode, e.colorIdx, t)
           : e.color;
-        cells.push({ row: r, col: c, char: ch, brightness: 1 - t, color, glowRadius: this.glowRadius });
+        out.push(r, c, code, 1 - t, color, this.glowRadius);
       }
     }
-
-    return cells;
   }
 
   getControls(): ControlDescriptor[] {

@@ -1,5 +1,6 @@
 import type { AsciiEffect, GridInfo, MaskGrid } from "./effects/types";
 import type { MaskRegion } from "./effects/types";
+import { CellBuffer, NO_COLOR, packedToHex } from "./cell-buffer";
 
 export interface ActiveEffect {
   instance: AsciiEffect;
@@ -47,18 +48,37 @@ export interface CompositeOptions {
 let _cachedCols = 0;
 let _cachedRows = 0;
 let _brightMap = new Float32Array(0);
-let _charMap = new Uint8Array(0);
-let _colorIndices = new Int16Array(0); // index into per-frame color table, -1 = no color
-let _asciiCodes = new Uint16Array(0); // char code, 0 = none
-let _radiusVals = new Float32Array(0); // -1 = no custom radius
+let _cellCodes = new Uint32Array(0); // winning cell's code point, 0 = none
+let _cellColors = new Uint32Array(0); // packed color, 0 = none
+let _asciiCodes = new Uint32Array(0); // base char code point for applyToAscii, 0 = none
+let _radiusVals = new Float64Array(0); // -1 = no custom radius (f64: keep effect values exact)
 let _cachedBaseText = "";
 let _cachedBaseLines: string[] = [];
 let _textBuf: string[] = [];
 
-const _chars: string[] = [" "];
-const _charIndex = new Map<string, number>();
-const _colorTable: string[] = [];
-const _colorLookup = new Map<string, number>();
+// Scratch buffer effects write into (cleared per effect per frame)
+const _scratch = new CellBuffer(1024);
+
+// Boundary memos: code points / packed colors become strings only here.
+const _charMemo = new Map<number, string>();
+function codeToChar(code: number): string {
+  let s = _charMemo.get(code);
+  if (s === undefined) {
+    s = String.fromCodePoint(code);
+    if (_charMemo.size < 4096) _charMemo.set(code, s);
+  }
+  return s;
+}
+const _hexMemo = new Map<number, string>();
+function colorToHex(packed: number): string {
+  let s = _hexMemo.get(packed);
+  if (s === undefined) {
+    s = packedToHex(packed);
+    if (_hexMemo.size >= 4096) _hexMemo.clear();
+    _hexMemo.set(packed, s);
+  }
+  return s;
+}
 
 const _glowPool: GlowCell[] = [];
 let _glowCount = 0;
@@ -85,16 +105,15 @@ export function compositeFrame(
     _cachedCols = cols;
     _cachedRows = rows;
     _brightMap = new Float32Array(total);
-    _charMap = new Uint8Array(total);
-    _colorIndices = new Int16Array(total);
-    _asciiCodes = new Uint16Array(total);
-    _radiusVals = new Float32Array(total);
-    _colorIndices.fill(-1);
+    _cellCodes = new Uint32Array(total);
+    _cellColors = new Uint32Array(total);
+    _asciiCodes = new Uint32Array(total);
+    _radiusVals = new Float64Array(total);
     _radiusVals.fill(-1);
   } else {
     _brightMap.fill(0);
-    _charMap.fill(0);
-    _colorIndices.fill(-1);
+    _cellCodes.fill(0);
+    _cellColors.fill(0);
     _asciiCodes.fill(0);
     _radiusVals.fill(-1);
   }
@@ -106,41 +125,11 @@ export function compositeFrame(
   }
 
   const brightMap = _brightMap;
-  const charMap = _charMap;
-  const colorIndices = _colorIndices;
+  const cellCodes = _cellCodes;
+  const cellColors = _cellColors;
   const asciiCodes = _asciiCodes;
   const radiusVals = _radiusVals;
   const baseLines = _cachedBaseLines;
-  // Reset reusable lookup structures
-  _chars.length = 1; _chars[0] = " ";
-  _charIndex.clear(); _charIndex.set(" ", 0);
-  _colorTable.length = 0;
-  _colorLookup.clear();
-
-  const chars = _chars;
-  const charIndex = _charIndex;
-  const colorTable = _colorTable;
-  const colorLookup = _colorLookup;
-
-  function getCharIdx(ch: string): number {
-    let idx = charIndex.get(ch);
-    if (idx === undefined) {
-      idx = chars.length;
-      chars.push(ch);
-      charIndex.set(ch, idx);
-    }
-    return idx;
-  }
-
-  function getColorIdx(color: string): number {
-    let idx = colorLookup.get(color);
-    if (idx === undefined) {
-      idx = colorTable.length;
-      colorTable.push(color);
-      colorLookup.set(color, idx);
-    }
-    return idx;
-  }
 
   for (const fx of effects) {
     if (!fx.enabled) continue;
@@ -156,10 +145,15 @@ export function compositeFrame(
         effectTime = effectTime % effectDuration;
       }
     }
-    const cells = fx.instance.update(dt, effectTime, mask);
+    _scratch.clear();
+    fx.instance.update(dt, effectTime, mask, _scratch);
 
-    for (const cell of cells) {
-      const { row, col, char, brightness = 0.5, color } = cell;
+    const n = _scratch.length;
+    const sRows = _scratch.rows, sCols = _scratch.cols, sCodes = _scratch.codes;
+    const sBright = _scratch.brightness, sColors = _scratch.colors, sGlow = _scratch.glowRadius;
+    for (let i = 0; i < n; i++) {
+      const row = sRows[i];
+      const col = sCols[i];
       if (row < 0 || row >= rows || col < 0 || col >= cols) continue;
 
       const maskVal = mask.get(row, col);
@@ -167,6 +161,7 @@ export function compositeFrame(
       if (fx.maskRegion === "foreground" && maskVal >= 0.5) continue;
 
       const idx = row * cols + col;
+      const brightness = sBright[i];
 
       if (fx.applyToAscii) {
         // Colorize existing ASCII character instead of drawing effect's own char
@@ -174,16 +169,16 @@ export function compositeFrame(
         if (!baseCh || baseCh === " ") continue; // skip empty positions
         if (brightness > brightMap[idx]) {
           brightMap[idx] = brightness;
-          if (color) colorIndices[idx] = getColorIdx(color);
-          radiusVals[idx] = cell.glowRadius ?? -1;
-          asciiCodes[idx] = baseCh.charCodeAt(0);
+          if (sColors[i] !== NO_COLOR) cellColors[idx] = sColors[i];
+          radiusVals[idx] = sGlow[i];
+          asciiCodes[idx] = baseCh.codePointAt(0)!;
         }
       } else {
         if (brightness > brightMap[idx]) {
           brightMap[idx] = brightness;
-          charMap[idx] = getCharIdx(char);
-          if (color) colorIndices[idx] = getColorIdx(color);
-          radiusVals[idx] = cell.glowRadius ?? -1;
+          cellCodes[idx] = sCodes[i];
+          if (sColors[i] !== NO_COLOR) cellColors[idx] = sColors[i];
+          radiusVals[idx] = sGlow[i];
         }
       }
     }
@@ -203,7 +198,9 @@ export function compositeFrame(
       const base = r * cols;
       for (let c = 0; c < cols; c++) {
         const idx = base + c;
-        _textBuf[pos++] = excludeColored && colorIndices[idx] >= 0 ? " " : chars[charMap[idx]];
+        const code = cellCodes[idx];
+        _textBuf[pos++] =
+          code === 0 || (excludeColored && cellColors[idx] !== NO_COLOR) ? " " : codeToChar(code);
       }
     }
     const savedLen = _textBuf.length;
@@ -215,12 +212,10 @@ export function compositeFrame(
   // Collect cells with color for glow rendering (pooled)
   _glowCount = 0;
   for (let i = 0; i < cols * rows; i++) {
-    const ci = colorIndices[i];
-    if (ci >= 0) {
-      const glowChar = asciiCodes[i] > 0
-        ? String.fromCharCode(asciiCodes[i])
-        : (charMap[i] !== 0 ? chars[charMap[i]] : undefined);
-      if (glowChar) {
+    const packed = cellColors[i];
+    if (packed !== NO_COLOR) {
+      const glowCode = asciiCodes[i] > 0 ? asciiCodes[i] : cellCodes[i];
+      if (glowCode !== 0) {
         let gc = _glowPool[_glowCount];
         if (!gc) {
           gc = { row: 0, col: 0, char: "", color: "", brightness: 0 };
@@ -228,8 +223,8 @@ export function compositeFrame(
         }
         gc.row = Math.floor(i / cols);
         gc.col = i % cols;
-        gc.char = glowChar;
-        gc.color = colorTable[ci];
+        gc.char = codeToChar(glowCode);
+        gc.color = colorToHex(packed);
         gc.brightness = brightMap[i];
         gc.glowRadius = radiusVals[i] >= 0 ? radiusVals[i] : undefined;
         gc.asciiOverlay = asciiCodes[i] > 0;

@@ -1,10 +1,12 @@
-import type { AsciiEffect, GridInfo, MaskGrid, EffectCell, ControlDescriptor } from "./types";
-import { type ColorMode, pickColor, readColors, readColorMode, colorControls } from "./color-util";
+import type { AsciiEffect, GridInfo, MaskGrid, ControlDescriptor } from "./types";
+import { type ColorMode, pickColorPacked, readColorsPacked, readColorMode, colorControls } from "./color-util";
+import { type CellBuffer } from "../cell-buffer";
 
 const DECODE_CHARS = "@#W$9876543210?!abc;:+=-,._";
+const DECODE_CODES: number[] = [...DECODE_CHARS].map((c) => c.codePointAt(0)!);
 
-function randomDecodeChar(): string {
-  return DECODE_CHARS[Math.floor(Math.random() * DECODE_CHARS.length)];
+function randomDecodeCode(): number {
+  return DECODE_CODES[Math.floor(Math.random() * DECODE_CODES.length)];
 }
 
 export class DecodeEffect implements AsciiEffect {
@@ -16,9 +18,8 @@ export class DecodeEffect implements AsciiEffect {
   private duration = 2.4;
   private settleTime = 0.4;
   private diagonalBias = 0.7;
-  private colors: string[] = ["#00ff41"];
+  private colors: number[] = [];
   private colorMode: ColorMode = "random";
-  private _cells: EffectCell[] = [];
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
     const newDuration = (params.duration as number) ?? 2.4;
@@ -33,7 +34,7 @@ export class DecodeEffect implements AsciiEffect {
     this.duration = newDuration;
     this.settleTime = (params.settleTime as number) ?? 0.4;
     this.diagonalBias = newDiagonalBias;
-    this.colors = readColors(params, "#00ff41");
+    this.colors = readColorsPacked(params, "#00ff41");
     this.colorMode = readColorMode(params);
 
     if (needsRebuild) this.buildDelays();
@@ -65,14 +66,12 @@ export class DecodeEffect implements AsciiEffect {
     this.baseChars = text.split("\n").map((line) => [...line]);
   }
 
-  update(_dt: number, time: number, _mask: MaskGrid): EffectCell[] {
+  update(_dt: number, time: number, _mask: MaskGrid, out: CellBuffer): void {
     const { cols, rows } = this.grid;
-    if (this.baseChars.length === 0) return [];
+    if (this.baseChars.length === 0) return;
 
     // Effect is done after duration + settleTime
-    if (time > this.duration + this.settleTime + 0.5) return [];
-
-    const cells = this._cells; cells.length = 0;
+    if (time > this.duration + this.settleTime + 0.5) return;
 
     for (let r = 0; r < rows && r < this.baseChars.length; r++) {
       const row = this.baseChars[r];
@@ -80,25 +79,23 @@ export class DecodeEffect implements AsciiEffect {
         const delay = this.delays[r]?.[c] ?? 0;
         const elapsed = time - delay;
         const idx = this.cellColorIdx[r]?.[c] ?? 0;
-        const color = pickColor(this.colors, this.colorMode === "gradient" ? "random" : this.colorMode, idx);
+        const color = pickColorPacked(this.colors, this.colorMode === "gradient" ? "random" : this.colorMode, idx);
 
         if (elapsed < 0) {
           // Not yet revealed — occasional random char
           if (Math.random() < 0.15) {
-            cells.push({ row: r, col: c, char: randomDecodeChar(), brightness: 0.3, color });
+            out.push(r, c, randomDecodeCode(), 0.3, color);
           }
         } else if (elapsed < this.settleTime) {
           // Flickering between random and correct
           const progress = elapsed / this.settleTime;
           const correct = Math.random() < progress * 0.8;
-          const ch = correct ? row[c] : randomDecodeChar();
-          cells.push({ row: r, col: c, char: ch, brightness: 0.5 + progress * 0.5, color });
+          const chCode = correct ? row[c].codePointAt(0)! : randomDecodeCode();
+          out.push(r, c, chCode, 0.5 + progress * 0.5, color);
         }
         // After settleTime: correct char locked in (handled by base ASCII layer)
       }
     }
-
-    return cells;
   }
 
   getControls(): ControlDescriptor[] {

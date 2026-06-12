@@ -1,5 +1,12 @@
-import type { AsciiEffect, GridInfo, MaskGrid, EffectCell, ControlDescriptor } from "./types";
-import { type ColorMode, pickColor, readColors, readColorMode, colorControls } from "./color-util";
+import type { AsciiEffect, GridInfo, MaskGrid, ControlDescriptor } from "./types";
+import { type ColorMode, pickColorPacked, readColorsPacked, readColorMode, colorControls, WHITE_PACKED } from "./color-util";
+import { type CellBuffer } from "../cell-buffer";
+
+// Character code points
+const CODE_STAR = "*".codePointAt(0)!;
+const CODE_PLUS = "+".codePointAt(0)!;
+const CODE_MIDDOT = "·".codePointAt(0)!;
+const CODE_DOT = ".".codePointAt(0)!;
 
 interface Star {
   c: number;
@@ -7,7 +14,7 @@ interface Star {
   phase: number;
   speed: number;
   big: boolean;
-  color: string;
+  color: number;
   colorIdx: number;
 }
 
@@ -20,12 +27,11 @@ export class TwinkleEffect implements AsciiEffect {
   private speedMax = 2.3;
   private bigChance = 0.35;
   private prevBigChance = 0.35;
-  private colors: string[] = ["#ffffff"];
-  private prevColors: string[] = ["#ffffff"];
+  private colors: number[] = [WHITE_PACKED];
+  private prevColors: number[] = [WHITE_PACKED];
   private colorMode: ColorMode = "random";
   private prevColorMode: ColorMode = "random";
   private glowRadius = 18;
-  private _cells: EffectCell[] = [];
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
     const newCount = (params.count as number) ?? 50;
@@ -39,7 +45,7 @@ export class TwinkleEffect implements AsciiEffect {
     this.speedMin = (params.speedMin as number) ?? 0.5;
     this.speedMax = (params.speedMax as number) ?? 2.3;
     this.bigChance = (params.bigChance as number) ?? 0.35;
-    this.colors = readColors(params, "#ffffff");
+    this.colors = readColorsPacked(params, "#ffffff");
     this.colorMode = readColorMode(params);
     this.glowRadius = (params.glowRadius as number) ?? 18;
 
@@ -55,7 +61,7 @@ export class TwinkleEffect implements AsciiEffect {
           phase: Math.random() * Math.PI * 2,
           speed: this.speedMin + Math.random() * (this.speedMax - this.speedMin),
           big: Math.random() < this.bigChance,
-          color: pickColor(this.colors, this.colorMode, colorIdx),
+          color: pickColorPacked(this.colors, this.colorMode, colorIdx),
           colorIdx,
         };
       });
@@ -73,7 +79,7 @@ export class TwinkleEffect implements AsciiEffect {
             : i;
         }
         if (bigChanceChanged) s.big = Math.random() < this.bigChance;
-        s.color = pickColor(this.colors, this.colorMode, s.colorIdx);
+        s.color = pickColorPacked(this.colors, this.colorMode, s.colorIdx);
       }
     }
     this.prevColors = [...this.colors];
@@ -81,26 +87,24 @@ export class TwinkleEffect implements AsciiEffect {
     this.prevBigChance = this.bigChance;
   }
 
-  update(_dt: number, time: number, _mask: MaskGrid): EffectCell[] {
-    const cells = this._cells; cells.length = 0;
+  update(_dt: number, time: number, _mask: MaskGrid, out: CellBuffer): void {
     for (const s of this.stars) {
       const pulse = 0.5 + 0.5 * Math.sin(time * s.speed + s.phase);
       if (pulse < 0.25) continue;
       // For gradient mode, use pulse phase as t
       const color = this.colorMode === "gradient"
-        ? pickColor(this.colors, this.colorMode, s.colorIdx, pulse)
+        ? pickColorPacked(this.colors, this.colorMode, s.colorIdx, pulse)
         : s.color;
-      const ch = pulse > 0.85 ? "*" : pulse > 0.6 ? "+" : "\u00B7";
-      cells.push({ row: s.r, col: s.c, char: ch, brightness: pulse, color, glowRadius: this.glowRadius });
+      const ch = pulse > 0.85 ? CODE_STAR : pulse > 0.6 ? CODE_PLUS : CODE_MIDDOT;
+      out.push(s.r, s.c, ch, pulse, color, this.glowRadius);
       if (s.big && pulse > 0.6) {
-        if (s.c - 1 >= 0) cells.push({ row: s.r, col: s.c - 1, char: ".", brightness: pulse * 0.5, color, glowRadius: this.glowRadius * 0.6 });
-        if (s.c + 1 < this.grid.cols) cells.push({ row: s.r, col: s.c + 1, char: ".", brightness: pulse * 0.5, color, glowRadius: this.glowRadius * 0.6 });
+        if (s.c - 1 >= 0) out.push(s.r, s.c - 1, CODE_DOT, pulse * 0.5, color, this.glowRadius * 0.6);
+        if (s.c + 1 < this.grid.cols) out.push(s.r, s.c + 1, CODE_DOT, pulse * 0.5, color, this.glowRadius * 0.6);
         if (pulse > 0.9 && s.r - 1 >= 0) {
-          cells.push({ row: s.r - 1, col: s.c, char: ".", brightness: pulse * 0.3, color, glowRadius: this.glowRadius * 0.4 });
+          out.push(s.r - 1, s.c, CODE_DOT, pulse * 0.3, color, this.glowRadius * 0.4);
         }
       }
     }
-    return cells;
   }
 
   getControls(): ControlDescriptor[] {

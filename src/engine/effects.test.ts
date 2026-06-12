@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { createEffect } from "./effects";
-import type { EffectType, GridInfo, MaskGrid } from "./effects/types";
+import { CellBuffer, cellBufferToArray, type ExtractedCell } from "./cell-buffer";
+import type { AsciiEffect, EffectType, GridInfo, MaskGrid } from "./effects/types";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -8,6 +9,14 @@ import type { EffectType, GridInfo, MaskGrid } from "./effects/types";
 
 function makeGrid(cols = 80, rows = 40): GridInfo {
   return { cols, rows, charW: 8, charH: 16, fontSize: 14 };
+}
+
+const SHARED_BUF = new CellBuffer();
+/** Steps an effect one frame and returns readable cells. */
+function update(fx: AsciiEffect, dt: number, time: number, mask: MaskGrid): ExtractedCell[] {
+  SHARED_BUF.clear();
+  fx.update(dt, time, mask, SHARED_BUF);
+  return cellBufferToArray(SHARED_BUF);
 }
 
 function makeMask(value = 1): MaskGrid {
@@ -68,9 +77,9 @@ describe("effects", () => {
         fx.init(grid, {});
 
         // Run a few updates to let particle-based effects spawn
-        let cells: ReturnType<typeof fx.update> = [];
+        let cells: ExtractedCell[] = [];
         for (let i = 0; i < 10; i++) {
-          cells = fx.update(0.016, i * 0.016, mask);
+          cells = update(fx, 0.016, i * 0.016, mask);
         }
 
         for (const cell of cells) {
@@ -90,9 +99,9 @@ describe("effects", () => {
         const fx = createEffect(type);
         fx.init(grid, {});
 
-        let cells: ReturnType<typeof fx.update> = [];
+        let cells: ExtractedCell[] = [];
         for (let i = 0; i < 10; i++) {
-          cells = fx.update(0.016, i * 0.016, mask);
+          cells = update(fx, 0.016, i * 0.016, mask);
         }
 
         for (const cell of cells) {
@@ -115,9 +124,9 @@ describe("effects", () => {
         const fx = createEffect(type);
         fx.init(grid, {});
 
-        let cells: ReturnType<typeof fx.update> = [];
+        let cells: ExtractedCell[] = [];
         for (let i = 0; i < 10; i++) {
-          cells = fx.update(0.016, i * 0.016, mask);
+          cells = update(fx, 0.016, i * 0.016, mask);
         }
 
         for (const cell of cells) {
@@ -146,7 +155,7 @@ describe("effects", () => {
     it.each(ALL_EFFECT_TYPES)("%s update returns an array", (type) => {
       const fx = createEffect(type);
       fx.init(makeGrid(), {});
-      const result = fx.update(0.016, 0, makeMask());
+      const result = update(fx, 0.016, 0, makeMask());
       expect(Array.isArray(result)).toBe(true);
     });
   });
@@ -185,12 +194,12 @@ describe("effects", () => {
 
         // Warm up so particle effects accumulate state
         for (let i = 0; i < 300; i++) {
-          fx.update(0.016, i * 0.016, mask);
+          update(fx, 0.016, i * 0.016, mask);
         }
         const t = 300 * 0.016;
 
-        const frameA = cellKeys(fx.update(0, t, mask));
-        const frameB = cellKeys(fx.update(0, t, mask));
+        const frameA = cellKeys(update(fx, 0, t, mask));
+        const frameB = cellKeys(update(fx, 0, t, mask));
 
         expect(frameB).toEqual(frameA);
       }
@@ -207,14 +216,14 @@ describe("effects", () => {
         fx.init(grid, { colors: ["#ffffff"] });
 
         for (let i = 0; i < 300; i++) {
-          fx.update(0.016, i * 0.016, mask);
+          update(fx, 0.016, i * 0.016, mask);
         }
         const t = 300 * 0.016;
-        const before = cellKeys(fx.update(0, t, mask));
+        const before = cellKeys(update(fx, 0, t, mask));
 
         // Same grid, only palette changed — particles must keep positions
         fx.init(grid, { colors: ["#ff00ff"] });
-        const after = cellKeys(fx.update(0, t, mask));
+        const after = cellKeys(update(fx, 0, t, mask));
 
         expect(after).toEqual(before);
       }
@@ -231,9 +240,9 @@ describe("effects", () => {
         fx.init(makeGrid(), { intervalMin: 5, intervalMax: 5 });
 
         // Establish lastTime
-        fx.update(0.1, 1, makeMask());
+        update(fx, 0.1, 1, makeMask());
         // Wrap to t=0 (simulates loop boundary in timeline playback)
-        fx.update(0.1, 0, makeMask());
+        update(fx, 0.1, 0, makeMask());
 
         const internal = fx as unknown as { nextSpawn: number };
         expect(internal.nextSpawn).toBeGreaterThanOrEqual(5);
