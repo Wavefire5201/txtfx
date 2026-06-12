@@ -21,13 +21,22 @@ export class DecodeEffect implements AsciiEffect {
   private _cells: EffectCell[] = [];
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
+    const newDuration = (params.duration as number) ?? 2.4;
+    const newDiagonalBias = (params.diagonalBias as number) ?? 0.7;
+    const needsRebuild = this.delays.length === 0
+      || grid.cols !== this.grid.cols
+      || grid.rows !== this.grid.rows
+      || newDuration !== this.duration
+      || newDiagonalBias !== this.diagonalBias;
+
     this.grid = grid;
-    this.duration = (params.duration as number) ?? 2.4;
+    this.duration = newDuration;
     this.settleTime = (params.settleTime as number) ?? 0.4;
-    this.diagonalBias = (params.diagonalBias as number) ?? 0.7;
+    this.diagonalBias = newDiagonalBias;
     this.colors = readColors(params, "#00ff41");
     this.colorMode = readColorMode(params);
-    this.buildDelays();
+
+    if (needsRebuild) this.buildDelays();
   }
 
   private buildDelays(): void {

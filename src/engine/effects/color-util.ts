@@ -14,7 +14,7 @@ function toHex(r: number, g: number, b: number): string {
   return `#${clamp(r).toString(16).padStart(2, "0")}${clamp(g).toString(16).padStart(2, "0")}${clamp(b).toString(16).padStart(2, "0")}`;
 }
 
-function lerpColor(a: string, b: string, t: number): string {
+export function lerpColor(a: string, b: string, t: number): string {
   const [ar, ag, ab] = parseHex(a);
   const [br, bg, bb] = parseHex(b);
   return toHex(

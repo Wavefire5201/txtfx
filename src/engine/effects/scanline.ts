@@ -47,11 +47,13 @@ export class ScanlineEffect implements AsciiEffect {
         const t = w / this.width;
         const b = this.brightness * (1 - t * 0.6);
         const ch = this.chars[Math.min(w, this.chars.length - 1)] || "=";
-        const gr = this.glowRadius * (1 - t * 0.5);
+        // Glow only on the leading row — emitting one glow sprite per cell × width
+        // tanks performance on wide grids
+        const gr = w === 0 ? this.glowRadius : 0;
 
         for (let c = 0; c < cols; c++) {
-          // Slight horizontal variation for visual interest
-          const flicker = Math.sin(c * 0.5 + time * 12 + s * 3) * 0.15;
+          // Slow CRT-like horizontal undulation, gentle amplitude
+          const flicker = Math.sin(c * 0.4 + time * 5 + s * 3) * 0.1;
           const finalB = Math.max(0.1, b + flicker);
           // For gradient mode, gradient across width
           const color = this.colorMode === "gradient"

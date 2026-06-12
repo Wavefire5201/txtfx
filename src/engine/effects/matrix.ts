@@ -1,5 +1,5 @@
 import type { AsciiEffect, GridInfo, MaskGrid, EffectCell, ControlDescriptor } from "./types";
-import { type ColorMode, pickColor, readColors, readColorMode, colorControls } from "./color-util";
+import { type ColorMode, pickColor, readColors, readColorMode, colorControls, lerpColor } from "./color-util";
 
 const MATRIX_CHARS = "0123456789abcdefABCDEF:.<>+*";
 
@@ -133,9 +133,12 @@ export class MatrixEffect implements AsciiEffect {
         }
 
         // For gradient mode, gradient down the column trail
-        const color = this.colorMode === "gradient"
+        let color = this.colorMode === "gradient"
           ? pickColor(this.colors, this.colorMode, col.colorIdx, t)
           : col.color;
+
+        // Brighten the leading char toward white for the classic Matrix head highlight
+        if (i === 0) color = lerpColor(color, "#ffffff", 0.6);
 
         cells.push({ row: r, col: c, char: col.chars[r], brightness, color, glowRadius: this.glowRadius });
       }

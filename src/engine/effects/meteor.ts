@@ -69,7 +69,7 @@ export class MeteorEffect implements AsciiEffect {
 
     // Detect loop wrap: if time went backward, reset nextSpawn to new time + interval
     if (time < this.lastTime) {
-      this.nextSpawn = time + Math.random() * (this.intervalMax - this.intervalMin);
+      this.nextSpawn = time + this.intervalMin + Math.random() * (this.intervalMax - this.intervalMin);
     }
     this.lastTime = time;
 

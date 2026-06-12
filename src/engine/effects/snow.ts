@@ -9,6 +9,7 @@ interface Flake {
   phase: number;
   char: string;
   color: string;
+  baseBrightness: number;
 }
 
 const SNOW_CHARS = ["*", "\u00B7", "."];
@@ -21,6 +22,7 @@ export class SnowEffect implements AsciiEffect {
   private speedMin = 3;
   private speedMax = 8;
   private driftAmount = 2;
+  private wind = 0;
   private spawnAccum = 0;
   private spawnCounter = 0;
   private colors: string[] = ["#ffffff"];
@@ -37,6 +39,7 @@ export class SnowEffect implements AsciiEffect {
     this.speedMin = (params.speedMin as number) ?? 3;
     this.speedMax = (params.speedMax as number) ?? 8;
     this.driftAmount = (params.driftAmount as number) ?? 2;
+    this.wind = (params.wind as number) ?? 0;
     this.colors = readColors(params, "#ffffff");
     this.colorMode = readColorMode(params);
     this.glowRadius = (params.glowRadius as number) ?? 12;
@@ -68,6 +71,7 @@ export class SnowEffect implements AsciiEffect {
         phase: Math.random() * Math.PI * 2,
         char: SNOW_CHARS[Math.floor(Math.random() * SNOW_CHARS.length)],
         color: pickColor(this.colors, this.colorMode === "gradient" ? "random" : this.colorMode, idx),
+        baseBrightness: 0.55 + Math.random() * 0.35,
       });
       this.spawnCounter++;
     }
@@ -75,9 +79,9 @@ export class SnowEffect implements AsciiEffect {
     for (let i = this.flakes.length - 1; i >= 0; i--) {
       const f = this.flakes[i];
       f.y += f.speed * dt;
-      f.col += Math.sin(time * 1.5 + f.phase) * f.drift * dt;
+      f.col += (Math.sin(time * 1.5 + f.phase) * f.drift + this.wind) * dt;
 
-      if (f.y > rows) {
+      if (f.y > rows || f.col < -2 || f.col > cols + 2) {
         this.flakes[i] = this.flakes[this.flakes.length - 1];
         this.flakes.pop();
         continue;
@@ -86,7 +90,9 @@ export class SnowEffect implements AsciiEffect {
       const r = Math.floor(f.y);
       const c = Math.round(f.col);
       if (r >= 0 && r < rows && c >= 0 && c < cols) {
-        cells.push({ row: r, col: c, char: f.char, brightness: 0.7, color: f.color, glowRadius: this.glowRadius });
+        // Fade in over the first 2 rows so flakes don't pop into existence
+        const fadeIn = r < 2 ? (r + 1) / 3 : 1;
+        cells.push({ row: r, col: c, char: f.char, brightness: f.baseBrightness * fadeIn, color: f.color, glowRadius: this.glowRadius });
       }
     }
 
@@ -99,6 +105,7 @@ export class SnowEffect implements AsciiEffect {
       { key: "speedMin", label: "Min speed", type: "slider", min: 1, max: 10, step: 0.5, defaultValue: 3 },
       { key: "speedMax", label: "Max speed", type: "slider", min: 3, max: 20, step: 0.5, defaultValue: 8 },
       { key: "driftAmount", label: "Drift", type: "slider", min: 0, max: 5, step: 0.5, defaultValue: 2 },
+      { key: "wind", label: "Wind", type: "slider", min: -10, max: 10, step: 0.5, defaultValue: 0 },
       ...colorControls("#ffffff"),
       { key: "glowRadius", label: "Glow radius", type: "slider", min: 0, max: 40, step: 1, defaultValue: 12 },
     ];

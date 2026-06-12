@@ -22,9 +22,10 @@ export class GlitchEffect implements AsciiEffect {
   private spawnCounter = 0;
   private frequency = 0.5;
   private blockSize = 8;
-  private intensity = 0.6;
+  private density = 0.6;
   private colors: string[] = ["#ff3366"];
   private colorMode: ColorMode = "random";
+  private glowRadius = 0;
   private _cells: EffectCell[] = [];
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
@@ -35,9 +36,11 @@ export class GlitchEffect implements AsciiEffect {
     this.grid = grid;
     this.frequency = (params.frequency as number) ?? 0.5;
     this.blockSize = (params.blockSize as number) ?? 8;
-    this.intensity = (params.intensity as number) ?? 0.6;
+    // Legacy `intensity` is supported as a fallback so older saved scenes keep working
+    this.density = (params.density as number) ?? (params.intensity as number) ?? 0.6;
     this.colors = readColors(params, "#ff3366");
     this.colorMode = readColorMode(params);
+    this.glowRadius = (params.glowRadius as number) ?? 0;
 
     if (needsRegen) {
       this.blocks = [];
@@ -86,9 +89,9 @@ export class GlitchEffect implements AsciiEffect {
 
       for (let r = b.row; r < b.row + b.h && r < rows; r++) {
         for (let c = b.col; c < b.col + b.w && c < cols; c++) {
-          if (Math.random() > this.intensity) continue;
+          if (Math.random() > this.density) continue;
           const ch = GLITCH_CHARS[Math.floor(Math.random() * GLITCH_CHARS.length)];
-          cells.push({ row: r, col: c, char: ch, brightness: 0.8 + Math.random() * 0.2, color: b.color });
+          cells.push({ row: r, col: c, char: ch, brightness: 0.8 + Math.random() * 0.2, color: b.color, glowRadius: this.glowRadius });
         }
       }
     }
@@ -100,8 +103,9 @@ export class GlitchEffect implements AsciiEffect {
     return [
       { key: "frequency", label: "Frequency (hz)", type: "slider", min: 0.1, max: 5, step: 0.1, defaultValue: 0.5 },
       { key: "blockSize", label: "Block size", type: "slider", min: 2, max: 20, step: 1, defaultValue: 8 },
-      { key: "intensity", label: "Intensity", type: "slider", min: 0.1, max: 1, step: 0.05, defaultValue: 0.6 },
+      { key: "density", label: "Density", type: "slider", min: 0.1, max: 1, step: 0.05, defaultValue: 0.6 },
       ...colorControls("#ff3366"),
+      { key: "glowRadius", label: "Glow radius", type: "slider", min: 0, max: 40, step: 1, defaultValue: 0 },
     ];
   }
 }

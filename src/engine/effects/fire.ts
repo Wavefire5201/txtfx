@@ -20,6 +20,7 @@ export class FireEffect implements AsciiEffect {
   private intensity = 0.5;
   private height = 0.3;
   private spread = 1.5;
+  private flicker = 0;
   private spawnAccum = 0;
   private spawnCounter = 0;
   private colors: string[] = ["#ff6622"];
@@ -35,6 +36,7 @@ export class FireEffect implements AsciiEffect {
     this.intensity = (params.intensity as number) ?? 0.5;
     this.height = (params.height as number) ?? 0.3;
     this.spread = (params.spread as number) ?? 1.5;
+    this.flicker = (params.flicker as number) ?? 0;
     this.colors = readColors(params, "#ff6622");
     this.colorMode = readColorMode(params);
     this.glowRadius = (params.glowRadius as number) ?? 16;
@@ -47,13 +49,17 @@ export class FireEffect implements AsciiEffect {
     }
   }
 
-  update(dt: number, _time: number, _mask: MaskGrid): EffectCell[] {
+  update(dt: number, time: number, _mask: MaskGrid): EffectCell[] {
     const { cols, rows } = this.grid;
     const cells = this._cells; cells.length = 0;
     const baseRow = rows - 1;
 
-    // Spawn embers with fractional accumulation
-    this.spawnAccum += cols * this.intensity * dt * 3;
+    // Spawn embers with fractional accumulation. Flicker modulates spawn rate
+    // with two offset sines so fire "breathes" instead of being a flat column.
+    const flickerMod = this.flicker > 0
+      ? 1 + this.flicker * 0.5 * (Math.sin(time * 2.3) + Math.sin(time * 5.7 + 1.3) * 0.5)
+      : 1;
+    this.spawnAccum += cols * this.intensity * dt * 3 * Math.max(0, flickerMod);
     const spawnCount = Math.floor(this.spawnAccum);
     this.spawnAccum -= spawnCount;
     for (let i = 0; i < spawnCount; i++) {
@@ -108,6 +114,7 @@ export class FireEffect implements AsciiEffect {
       { key: "intensity", label: "Intensity", type: "slider", min: 0.1, max: 1, step: 0.05, defaultValue: 0.5 },
       { key: "height", label: "Height", type: "slider", min: 0.1, max: 1, step: 0.05, defaultValue: 0.3 },
       { key: "spread", label: "Spread", type: "slider", min: 0, max: 5, step: 0.5, defaultValue: 1.5 },
+      { key: "flicker", label: "Flicker", type: "slider", min: 0, max: 1, step: 0.05, defaultValue: 0 },
       ...colorControls("#ff6622"),
       { key: "glowRadius", label: "Glow radius", type: "slider", min: 0, max: 40, step: 1, defaultValue: 16 },
     ];

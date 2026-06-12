@@ -19,6 +19,7 @@ export class TwinkleEffect implements AsciiEffect {
   private speedMin = 0.5;
   private speedMax = 2.3;
   private bigChance = 0.35;
+  private prevBigChance = 0.35;
   private colors: string[] = ["#ffffff"];
   private prevColors: string[] = ["#ffffff"];
   private colorMode: ColorMode = "random";
@@ -63,6 +64,7 @@ export class TwinkleEffect implements AsciiEffect {
       const paletteChanged = this.colors.length !== this.prevColors.length
         || this.colors.some((c, i) => c !== this.prevColors[i])
         || this.colorMode !== this.prevColorMode;
+      const bigChanceChanged = this.bigChance !== this.prevBigChance;
       for (let i = 0; i < this.stars.length; i++) {
         const s = this.stars[i];
         if (paletteChanged) {
@@ -70,11 +72,13 @@ export class TwinkleEffect implements AsciiEffect {
             ? Math.floor(Math.random() * this.colors.length)
             : i;
         }
+        if (bigChanceChanged) s.big = Math.random() < this.bigChance;
         s.color = pickColor(this.colors, this.colorMode, s.colorIdx);
       }
     }
     this.prevColors = [...this.colors];
     this.prevColorMode = this.colorMode;
+    this.prevBigChance = this.bigChance;
   }
 
   update(_dt: number, time: number, _mask: MaskGrid): EffectCell[] {

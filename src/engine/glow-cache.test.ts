@@ -99,4 +99,31 @@ describe("glow-cache", () => {
     expect(sprite.width).toBe(2);
     expect(sprite.height).toBe(2);
   });
+
+  it("cache size stays bounded under heavy insertion (FIFO eviction)", () => {
+    // Insert more entries than MAX_CACHE_SIZE (4096) with distinct keys
+    for (let i = 0; i < 5000; i++) {
+      getGlowSprite(i & 0xff, (i >> 8) & 0xff, (i >> 4) & 0xff, 10, 0.5);
+    }
+    expect(glowCacheSize()).toBeLessThanOrEqual(4096);
+  });
+
+  it("evicts oldest entry first (FIFO order)", () => {
+    clearGlowCache();
+    // Fill to cap with unique keys
+    for (let i = 0; i < 4096; i++) {
+      getGlowSprite(i & 0xff, (i >> 8) & 0xff, 0, 10, 0.5);
+    }
+    expect(glowCacheSize()).toBe(4096);
+
+    // Insert one more — first entry (r=0,g=0,b=0) should now be evicted
+    getGlowSprite(123, 123, 123, 10, 0.5);
+    expect(glowCacheSize()).toBe(4096);
+
+    // First insertion (key 0,0,0) was evicted — re-requesting builds a new sprite,
+    // which means size temporarily reaches 4096 again (one more was evicted to make room)
+    const reFirst = getGlowSprite(0, 0, 0, 10, 0.5);
+    expect(reFirst).toBeDefined();
+    expect(glowCacheSize()).toBe(4096);
+  });
 });

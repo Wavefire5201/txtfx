@@ -61,7 +61,7 @@ export class FireworkEffect implements AsciiEffect {
 
     // Detect loop wrap: if time went backward, reset nextSpawn to new time + interval
     if (time < this.lastTime) {
-      this.nextSpawn = time + Math.random() * (this.intervalMax - this.intervalMin);
+      this.nextSpawn = time + this.intervalMin + Math.random() * (this.intervalMax - this.intervalMin);
     }
     this.lastTime = time;
 
@@ -82,7 +82,9 @@ export class FireworkEffect implements AsciiEffect {
 
         p.c += p.vc * dt;
         p.r += p.vr * dt;
-        if (p.type === "spark") p.vr += 3 * dt; // gravity
+        // Gravity: full on falling sparks, gentle on main/flash so bursts don't hang
+        const g = p.type === "spark" ? 3 : p.type === "main" ? 1 : 0.6;
+        p.vr += g * dt;
 
         const t = p.life / p.maxLife;
         const brightness = Math.pow(1 - t, 2);
@@ -121,7 +123,7 @@ export class FireworkEffect implements AsciiEffect {
 
     // Main radial particles
     for (let i = 0; i < this.particleCount; i++) {
-      const angle = (Math.PI * 2 * i) / this.particleCount + (Math.random() - 0.5);
+      const angle = (Math.PI * 2 * i) / this.particleCount + (Math.random() - 0.5) * 0.3;
       const dist = 0.4 + Math.random() * 0.6;
       const speed = this.maxRadius * dist;
       const idx = this.colorMode === "random"
@@ -177,8 +179,8 @@ export class FireworkEffect implements AsciiEffect {
 
   getControls(): ControlDescriptor[] {
     return [
-      { key: "intervalMin", label: "Min interval (s)", type: "slider", min: 1, max: 10, step: 0.5, defaultValue: 3 },
-      { key: "intervalMax", label: "Max interval (s)", type: "slider", min: 2, max: 20, step: 0.5, defaultValue: 5 },
+      { key: "intervalMin", label: "Min interval (s)", type: "slider", min: 0.5, max: 10, step: 0.5, defaultValue: 3 },
+      { key: "intervalMax", label: "Max interval (s)", type: "slider", min: 1, max: 20, step: 0.5, defaultValue: 5 },
       { key: "particleCount", label: "Particles", type: "slider", min: 20, max: 100, step: 5, defaultValue: 50 },
       { key: "maxRadius", label: "Radius", type: "slider", min: 8, max: 40, step: 2, defaultValue: 20 },
       ...colorControls("#ffcc00"),

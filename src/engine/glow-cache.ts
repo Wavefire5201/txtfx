@@ -5,6 +5,10 @@
  */
 
 const BRIGHTNESS_LEVELS = 16; // quantize brightness to 16 steps for smooth transitions
+// Cap at 4096 entries (~15MB of canvas backing stores at typical radii). Gradient
+// color mode generates a new lerped color per frame and would otherwise grow this
+// Map unboundedly over a long playback session.
+const MAX_CACHE_SIZE = 4096;
 const cache = new Map<string, OffscreenCanvas | HTMLCanvasElement>();
 
 function quantize(value: number): number {
@@ -52,6 +56,11 @@ export function getGlowSprite(
   ctx.fillStyle = grad;
   ctx.fillRect(0, 0, size, size);
 
+  // FIFO eviction: when full, drop the oldest entry (Map preserves insertion order)
+  if (cache.size >= MAX_CACHE_SIZE) {
+    const oldest = cache.keys().next().value;
+    if (oldest !== undefined) cache.delete(oldest);
+  }
   cache.set(key, sprite);
   return sprite;
 }

@@ -73,7 +73,7 @@ export class RainEffect implements AsciiEffect {
       d.y += d.speed * dt;
       d.col += this.wind * dt;
 
-      if (d.y - d.length > rows) {
+      if (d.y - d.length > rows || d.col < -2 || d.col > cols + 2) {
         this.drops[i] = this.drops[this.drops.length - 1];
         this.drops.pop();
         continue;
