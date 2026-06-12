@@ -31,9 +31,27 @@ Notes:
 ### Export Improvements
 - [x] Bundle real effect engine into HTML export (replace hand-written JS copies)
 - [-] Rebuild HTML/embed export pipeline to bundle fonts, multi-color support, and new features
-- [ ] GIF export (record animation frames -> encode as GIF)
-- [ ] MP4/WebM video export (MediaRecorder API on canvas)
+- [x] GIF export (worker-based, sampled global palette, 256-color quality preset)
+- [x] MP4/WebM video export (WebCodecs via mediabunny, worker-based, custom resolution dialog)
 - [ ] npm package `txtfx-player` for embedding scenes in any website
+
+### Distribution & Export Media (from the 2026-06 performance review)
+- [ ] Wallpaper Engine web-wallpaper export (project.json package; Steam Workshop distribution) — the standalone HTML is ~90% of it
+- [ ] Lively Wallpaper (Windows) / Plash (macOS) compatibility notes + docs page
+- [ ] Perfect-loop helper for wallpaper/video exports (crossfade or simulate-to-loop-point so loops don't pop)
+- [ ] Transparent WebM (VP9 alpha) export — overlays for OBS / video editors
+- [ ] PNG image-sequence (zip) export for After Effects pipelines
+- [ ] Animated WebP / APNG export (modern GIF replacement: full color + real alpha)
+- [ ] CDN-hosted versioned player (`txtfx-player.js`) + `<txtfx-scene>` web component + React wrapper (IntersectionObserver pause, reduced-motion, DPR/FPS caps — player runtime already supports these)
+- [ ] OBS browser-source preset (transparent standalone HTML)
+- [ ] `npx txtfx` terminal screensaver / MOTD mode (terminal renderer already exists)
+- [ ] Sprite-sheet export for game engines
+- [ ] Scene seed UI (reroll button / seed field — engine is fully seeded as of Phase 6)
+
+### Native / Rust Track (deferred — pursue only if native targets become a product goal)
+- [ ] Rust + wgpu engine core compiled to native + WASM/WebGPU:
+      headless export CLI (ffmpeg → H.264/HEVC/ProRes 4444 with real alpha, no browser codec lottery, faster-than-realtime 4K),
+      native live-wallpaper binaries (macOS/Windows/Linux), single engine shared with web
 
 ### Editor Tools
 - [ ] Image filters (brightness, contrast, saturation) before ASCII conversion
@@ -103,9 +121,11 @@ Notes:
 - [ ] Migrate `editor.css` to hybrid Tailwind — keep CSS variables + grid layout in a slim CSS file, move component-level styles (buttons, panels, inputs, spacing) to Tailwind utility classes in JSX
 - [ ] Mask coordinate alignment (center-crop mismatch between ASCII and mask)
 - [ ] Export masking support in HTML runtime
-- [-] Object pooling for `EffectCell` (eliminate remaining per-frame allocations)
-- [-] OffscreenCanvas + Web Worker for glow rendering (off main thread)
-- [ ] Web Worker for effect computation (off main thread)
+- [x] Object pooling for `EffectCell` — superseded by SoA CellBuffer (typed arrays, packed colors, code points)
+- [x] OffscreenCanvas + Web Worker — full export pipeline (render+encode) runs in a worker
+- [-] Web Worker for effect computation — done for exports; editor preview stays on main thread (render is <1ms, GL path 0.3ms)
+- [ ] GL-rendered exports behind a flag (kept on Canvas2D for cross-machine byte-reproducibility)
+- [ ] Closed-form O(1) timeline seek (rejected for now: would teleport particles on param drags; revisit with per-run param epochs)
 - [ ] Service Worker for offline support
 
 Notes:
