@@ -35,6 +35,12 @@ export interface CompositeOptions {
    * glowCells, and the join costs ~a 12k-char string per frame.
    */
   buildText?: boolean;
+  /**
+   * Leave colored cells as spaces in the text frame. The standalone player's
+   * text layer only shows uncolored chars — colored ones render on its glow
+   * canvas, and including them in both would double the glyphs.
+   */
+  textExcludesColored?: boolean;
 }
 
 // Reusable buffers - resized only when grid dimensions change
@@ -190,12 +196,14 @@ export function compositeFrame(
     if (_textBuf.length < needed) {
       _textBuf = new Array(needed);
     }
+    const excludeColored = options.textExcludesColored ?? false;
     let pos = 0;
     for (let r = 0; r < rows; r++) {
       if (r > 0) _textBuf[pos++] = "\n";
       const base = r * cols;
       for (let c = 0; c < cols; c++) {
-        _textBuf[pos++] = chars[charMap[base + c]];
+        const idx = base + c;
+        _textBuf[pos++] = excludeColored && colorIndices[idx] >= 0 ? " " : chars[charMap[idx]];
       }
     }
     const savedLen = _textBuf.length;
