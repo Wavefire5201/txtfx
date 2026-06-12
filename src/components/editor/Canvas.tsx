@@ -95,6 +95,7 @@ export function Canvas() {
   const prevHolesRef = useRef<Set<number>>(new Set());
   const basePunchedRef = useRef(false);
   const glCanvasRef = useRef<HTMLCanvasElement>(null);
+  const bgTintRef = useRef(0);
   const glRendererRef = useRef<GlSceneRenderer | null>(null);
   const baseCodesRef = useRef<Uint32Array | null>(null);
 
@@ -278,6 +279,7 @@ export function Canvas() {
         bgRef.current.style.backgroundImage = `url("${imageUrl}")`;
         const [r, g, b] = sampleMeanColor(img);
         bgRef.current.style.backgroundColor = `rgb(${(r * 0.5) | 0}, ${(g * 0.5) | 0}, ${(b * 0.5) | 0})`;
+        bgTintRef.current = packRGB((r * 0.5) | 0, (g * 0.5) | 0, (b * 0.5) | 0);
       }
 
       computeContainRect();
@@ -394,31 +396,60 @@ export function Canvas() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [useGl, imageUrl]);
 
-  // Sync GL inputs whenever layout/scene knobs change
-  useEffect(() => {
+  // Sync GL inputs — each in its own effect with REAL deps. (A dep-less
+  // version of this ran on every perf-HUD re-render and rebuilt the glyph
+  // atlas twice a second, costing ~2fps in GL mode.)
+  const syncGlOptions = useCallback(() => {
     const renderer = glRendererRef.current;
-    if (!useGl || !renderer) return;
-    if (displayRect.w > 0) renderer.setViewport(displayRect.w, displayRect.h, window.devicePixelRatio || 1);
-    if (grid.cols > 0 && asciiRef.current) {
-      const family = getComputedStyle(asciiRef.current).fontFamily || "monospace";
-      renderer.setFont({
-        fontSize: grid.fontSize,
-        fontFamily: family,
-        charW: grid.charW,
-        charH: grid.charH,
-        dpr: window.devicePixelRatio || 1,
-      });
-      baseCodesRef.current = textToCodes(asciiTextRef.current, grid.cols, grid.rows);
-    }
-    if (imgRef.current) renderer.setBackdrop(showImage ? imgRef.current : null);
+    if (!renderer) return;
     const ascii = useEditorStore.getState().scene.ascii;
     const parsed = parseColor(ascii.color) ?? [220, 230, 255, 0.38];
     renderer.setSceneOptions({
       baseColor: packRGB(parsed[0], parsed[1], parsed[2]),
-      baseAlpha: showAscii ? parsed[3] * (ascii.opacity ?? 1) : 0,
+      baseAlpha: useEditorStore.getState().showAscii ? parsed[3] * (ascii.opacity ?? 1) : 0,
       blendMode: ascii.blendMode || "screen",
+      // Match the DOM preview's backdrop treatment (bg div at .86 over tint)
+      backdropOpacity: 0.86,
+      backdropTint: bgTintRef.current,
     });
-  });
+  }, []);
+
+  useEffect(() => {
+    const renderer = glRendererRef.current;
+    if (!useGl || !renderer || displayRect.w === 0) return;
+    renderer.setViewport(displayRect.w, displayRect.h, window.devicePixelRatio || 1);
+  }, [useGl, displayRect]);
+
+  useEffect(() => {
+    const renderer = glRendererRef.current;
+    if (!useGl || !renderer || grid.cols === 0 || !asciiRef.current) return;
+    const family = getComputedStyle(asciiRef.current).fontFamily || "monospace";
+    renderer.setFont({
+      fontSize: grid.fontSize,
+      fontFamily: family,
+      charW: grid.charW,
+      charH: grid.charH,
+      dpr: window.devicePixelRatio || 1,
+    });
+    baseCodesRef.current = textToCodes(asciiTextRef.current, grid.cols, grid.rows);
+  }, [useGl, grid]);
+
+  useEffect(() => {
+    const renderer = glRendererRef.current;
+    if (!useGl || !renderer || !imgRef.current) return;
+    renderer.setBackdrop(showImage ? imgRef.current : null);
+  }, [useGl, showImage, imageUrl, displayRect]);
+
+  useEffect(() => {
+    if (!useGl) return;
+    syncGlOptions();
+    // Keep GL options live for slider drags (which bypass React via the store)
+    return useEditorStore.subscribe((state, prev) => {
+      if (state.scene.ascii !== prev.scene.ascii || state.showAscii !== prev.showAscii) {
+        syncGlOptions();
+      }
+    });
+  }, [useGl, showAscii, imageUrl, syncGlOptions]);
 
   function renderGlFrame(buffers: NonNullable<ReturnType<typeof compositeFrame>["buffers"]>) {
     const renderer = glRendererRef.current;
@@ -1009,7 +1040,6 @@ export function Canvas() {
               inset: 0,
               backgroundSize: "100% 100%",
               backgroundPosition: "center",
-              transform: "scale(1.03)",
               opacity: 0.86,
               visibility: showImage && !useGl ? "visible" : "hidden",
             }}
@@ -1088,6 +1118,15 @@ export function Canvas() {
           <span>{imgSize.w} x {imgSize.h}</span>
           <span className="viewport-info-sep">|</span>
           <span>{grid.cols} x {grid.rows} chars</span>
+          <span className="viewport-info-sep">|</span>
+          <button
+            className="gl-toggle-btn"
+            onClick={() => setUseGl((v) => !v)}
+            title={useGl ? "WebGL renderer active — click for 2D" : "2D renderer active — click for WebGL"}
+            aria-pressed={useGl}
+          >
+            {useGl ? "GL" : "2D"}
+          </button>
         </div>
       )}
       <div className="perf-hud-wrap">
@@ -1103,15 +1142,6 @@ export function Canvas() {
             aria-pressed={showPerf}
           >
             <ChartLine size={13} />
-          </button>
-          <button
-            className="perf-toggle-btn"
-            onClick={() => setUseGl((v) => !v)}
-            title={useGl ? "Switch to 2D renderer" : "Switch to WebGL renderer"}
-            aria-pressed={useGl}
-            style={{ fontSize: 9, fontWeight: 700, color: useGl ? "var(--accent, #7defa0)" : undefined }}
-          >
-            GL
           </button>
           <div
             className="perf-panel-clip"

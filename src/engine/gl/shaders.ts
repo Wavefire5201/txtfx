@@ -26,12 +26,17 @@ precision highp float;
 uniform sampler2D uImage;
 uniform vec2 uCanvas;     // css px
 uniform float uHasImage;  // 0 => transparent backdrop
+uniform float uBackdropMix; // image opacity over the tint (editor/player dim ~0.86; export 1.0)
+uniform vec3 uTint;         // what shows through under the dimmed image
 in vec2 vUv;
 in vec2 vPos01;
 out vec4 outColor;
 void main() {
   if (uHasImage < 0.5) { outColor = vec4(0.0); return; }
   vec3 color = texture(uImage, vUv).rgb;
+  // Hosts that historically dim the backdrop (editor bg div / player .bg at
+  // opacity .86 over a dark tint) — applied UNDER the vignette, like the DOM.
+  color = mix(uTint, color, uBackdropMix);
   // Four sequential source-over radial gradients rgba(0,0,0,0.45) -> 0
   vec2 px = vPos01 * uCanvas;
   float r = max(uCanvas.x, uCanvas.y) * 0.5;

@@ -132,10 +132,13 @@ describe("GL renderer vs Canvas2D oracle", () => {
     const b = toImageData(glResult.canvas);
     const stats = compareStructural(a, b, glResult.grid);
 
-    // STRICT: no grid cell's mean color may diverge meaningfully
+    // STRICT: no grid cell's mean color may diverge meaningfully — this is
+    // the correctness check (alignment, colors, blending, missing glyphs).
     expect(stats.badCells, `cells over threshold (maxCellDiff=${stats.maxCellDiff.toFixed(1)}, mse=${stats.mse.toFixed(1)})`).toBeLessThanOrEqual(Math.ceil(glResult.grid.cols * glResult.grid.rows * 0.002));
-    // LOOSE: bounded global error (AA + shadow-halo omission allowance)
-    expect(stats.mse).toBeLessThan(120);
+    // LOOSE chaos backstop only: the supersampled atlas intentionally renders
+    // crisper glyph edges than the 2D rasterizer, so per-pixel error sits
+    // around ~800 on text-dense frames; total garbage lands in the thousands.
+    expect(stats.mse).toBeLessThan(1200);
   });
 
   it("GL frame golden (effects fixture at 1s)", async () => {

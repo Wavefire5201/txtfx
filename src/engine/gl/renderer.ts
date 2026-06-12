@@ -30,6 +30,10 @@ export interface GlSceneOptions {
   baseAlpha: number;
   /** "screen" and "normal" are exact; anything else renders as normal. */
   blendMode: string;
+  /** Image opacity over the tint. Editor/player historically dim to ~0.86; exports use 1. Default 1. */
+  backdropOpacity?: number;
+  /** Packed 0xFFRRGGBB color under the dimmed image. Default black. */
+  backdropTint?: number;
 }
 
 export interface GlFrame {
@@ -137,7 +141,7 @@ export class GlSceneRenderer {
     gl.bufferData(gl.ARRAY_BUFFER, QUAD_VERT_CORNERS, gl.STATIC_DRAW);
 
     this.backdropP = this.makeBundle(BACKDROP_VERT, BACKDROP_FRAG,
-      ["uUvRect", "uImage", "uCanvas", "uHasImage"], false);
+      ["uUvRect", "uImage", "uCanvas", "uHasImage", "uBackdropMix", "uTint"], false);
     this.glyphP = this.makeBundle(GLYPH_VERT, GLYPH_FRAG,
       ["uCell", "uPad", "uCanvas", "uQuad", "uInkPad", "uSlotGrid", "uCellUv", "uAtlas"], true);
     this.glowP = this.makeBundle(GLOW_VERT, GLOW_FRAG,
@@ -183,6 +187,20 @@ export class GlSceneRenderer {
   }
 
   setFont(font: AtlasFont): void {
+    // Idempotent: configure() drops every rasterized glyph (a visible hitch),
+    // so identical reconfigurations must be free.
+    const prev = this.atlasFont;
+    if (
+      prev &&
+      this.atlas &&
+      prev.fontSize === font.fontSize &&
+      prev.fontFamily === font.fontFamily &&
+      prev.charW === font.charW &&
+      prev.charH === font.charH &&
+      prev.dpr === font.dpr
+    ) {
+      return;
+    }
     this.atlasFont = font;
     if (!this.atlas) this.atlas = new GlyphAtlas(this.gl, font);
     else this.atlas.configure(font);
@@ -190,6 +208,7 @@ export class GlSceneRenderer {
 
   setBackdrop(source: ImageLike | null): void {
     const { gl } = this;
+    if (source === this.backdropSource && (source === null) === (this.backdrop === null)) return;
     this.backdropSource = source;
     if (!source) {
       if (this.backdrop) gl.deleteTexture(this.backdrop.texture);
@@ -308,6 +327,14 @@ export class GlSceneRenderer {
     } else {
       gl.uniform1f(bundle.uniforms.uHasImage, 0);
     }
+    gl.uniform1f(bundle.uniforms.uBackdropMix, this.options.backdropOpacity ?? 1);
+    const tint = this.options.backdropTint ?? 0;
+    gl.uniform3f(
+      bundle.uniforms.uTint,
+      ((tint >>> 16) & 0xff) / 255,
+      ((tint >>> 8) & 0xff) / 255,
+      (tint & 0xff) / 255,
+    );
     gl.uniform2f(bundle.uniforms.uCanvas, this.cssW, this.cssH);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
@@ -323,12 +350,12 @@ export class GlSceneRenderer {
     else gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 
     const grid = this.currentGrid!;
-    const dpr = this.dpr;
+    const scale = atlas.rasterScale;
     gl.uniform2f(bundle.uniforms.uCell, grid.charW, grid.charH);
     gl.uniform2f(bundle.uniforms.uPad, grid.padX ?? 0, grid.padY ?? 0);
     gl.uniform2f(bundle.uniforms.uCanvas, this.cssW, this.cssH);
-    gl.uniform2f(bundle.uniforms.uQuad, atlas.cellPxW / dpr, atlas.cellPxH / dpr);
-    gl.uniform1f(bundle.uniforms.uInkPad, atlas.padPx / dpr);
+    gl.uniform2f(bundle.uniforms.uQuad, atlas.cellPxW / scale, atlas.cellPxH / scale);
+    gl.uniform1f(bundle.uniforms.uInkPad, atlas.padPx / scale);
     gl.uniform2f(bundle.uniforms.uSlotGrid, atlas.slotCols, atlas.slotRows);
     const [cu, cv] = atlas.cellUv;
     gl.uniform2f(bundle.uniforms.uCellUv, cu, cv);

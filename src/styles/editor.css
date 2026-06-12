@@ -1762,6 +1762,29 @@ body {
   transition: border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
 }
 
+.gl-toggle-btn {
+  appearance: none;
+  cursor: pointer;
+  font: 700 9px/16px 'SFMono-Regular', Consolas, monospace;
+  letter-spacing: 0.05em;
+  color: var(--text-dim);
+  background: transparent;
+  border: 1px solid var(--border, #333);
+  border-radius: 9px;
+  padding: 0 9px;
+  height: 18px;
+  align-self: center;
+  transition: color 120ms ease, border-color 120ms ease, background 120ms ease;
+}
+.gl-toggle-btn:hover {
+  color: var(--text-bright);
+}
+.gl-toggle-btn[aria-pressed="true"] {
+  color: #7defa0;
+  border-color: rgba(125, 239, 160, 0.55);
+  background: rgba(125, 239, 160, 0.12);
+}
+
 .perf-hud--chip .perf-toggle-btn {
   width: var(--perf-control-size);
   height: var(--perf-control-size);

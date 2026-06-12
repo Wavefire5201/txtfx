@@ -231,6 +231,9 @@ declare const SCENE: {
       baseColor: parsed.packed,
       baseAlpha: parsed.alpha * (SCENE.ascii.opacity ?? 1),
       blendMode: SCENE.ascii.blendMode || "screen",
+      // Match the template's .bg layer: image at opacity .86 over #0a0a0e
+      backdropOpacity: 0.86,
+      backdropTint: 0x0a0a0e,
     });
     baseCodes = textToCodes(baseText, grid.cols, grid.rows);
   }

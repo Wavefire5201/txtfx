@@ -3,8 +3,9 @@
  * keyed by Unicode code point. Cells include a margin so ascenders/descenders
  * that overflow the grid cell (lineHeight < 1) render exactly like fillText.
  *
- * Rasterized at devicePixelRatio; quads are sized from the atlas cell so
- * texels map 1:1 to physical pixels (no resampling blur).
+ * Rasterized at 2x devicePixelRatio (capped at 4x): glyphs are sampled at
+ * fractional cell positions, and supersampled texels keep edges crisp where
+ * a 1x raster would bilinear-smear.
  */
 import { createAnyCanvas, get2d, type AnyCanvas, type AnyCtx2D } from "../canvas-util";
 
@@ -22,11 +23,13 @@ export interface AtlasFont {
 
 export class GlyphAtlas {
   readonly texture: WebGLTexture;
-  /** Atlas cell size in raster (physical) px. */
+  /** Atlas cell size in raster px. */
   cellPxW = 0;
   cellPxH = 0;
   /** Ink margin inside each cell, raster px. */
   padPx = 0;
+  /** Raster px per CSS px (supersampled: 2x dpr, capped). */
+  rasterScale = 1;
   /** Slots per atlas row/column. */
   slotCols = 0;
   slotRows = 0;
@@ -52,9 +55,10 @@ export class GlyphAtlas {
   configure(font: AtlasFont): void {
     this.font = font;
     const { gl } = this;
-    this.padPx = Math.ceil(font.fontSize * 0.6 * font.dpr);
-    this.cellPxW = Math.ceil(font.charW * font.dpr) + this.padPx * 2;
-    this.cellPxH = Math.ceil(font.charH * font.dpr) + this.padPx * 2;
+    this.rasterScale = Math.min(4, font.dpr * 2);
+    this.padPx = Math.ceil(font.fontSize * 0.6 * this.rasterScale);
+    this.cellPxW = Math.ceil(font.charW * this.rasterScale) + this.padPx * 2;
+    this.cellPxH = Math.ceil(font.charH * this.rasterScale) + this.padPx * 2;
     this.slotCols = Math.max(1, Math.floor(MAX_TEXTURE_DIM / this.cellPxW));
     this.slotRows = Math.max(1, Math.floor(MAX_TEXTURE_DIM / this.cellPxH));
     this.texW = this.slotCols * this.cellPxW;
@@ -95,7 +99,7 @@ export class GlyphAtlas {
 
     const { gl, scratchCtx: ctx, font } = this;
     ctx.clearRect(0, 0, this.cellPxW, this.cellPxH);
-    ctx.font = `700 ${font.fontSize * font.dpr}px ${font.fontFamily}`;
+    ctx.font = `700 ${font.fontSize * this.rasterScale}px ${font.fontFamily}`;
     ctx.textBaseline = "top";
     ctx.fillStyle = "#ffffff";
     ctx.fillText(String.fromCodePoint(code), this.padPx, this.padPx);
