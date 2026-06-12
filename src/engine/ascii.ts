@@ -119,11 +119,8 @@ export function imageToAscii(
 /**
  * Samples a 32×32 downscale of the image and returns the mean RGB color.
  */
-export function sampleMeanColor(img: HTMLImageElement): [number, number, number] {
-  const canvas = document.createElement("canvas");
-  canvas.width = 32;
-  canvas.height = 32;
-  const ctx = canvas.getContext("2d")!;
+export function sampleMeanColor(img: ImageLike): [number, number, number] {
+  const ctx = get2d(createAnyCanvas(32, 32));
   try {
     ctx.drawImage(img, 0, 0, 32, 32);
     const d = ctx.getImageData(0, 0, 32, 32).data;

@@ -19,7 +19,7 @@ export function exportStandaloneHTML(scene: SceneData): string {
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{width:100%;height:100%;overflow:hidden;background:#0a0a0e}
 .wrap{position:relative;width:100%;height:100%}
-.bg{position:absolute;inset:0;background-size:cover;background-position:center;transform:scale(1.03);opacity:.86}
+.bg{position:absolute;inset:0;background-size:cover;background-position:center;opacity:.86}
 .vig{position:absolute;inset:0;background:radial-gradient(at left top,rgba(0,0,0,.45),transparent 50%),radial-gradient(at right top,rgba(0,0,0,.45),transparent 50%),radial-gradient(at left bottom,rgba(0,0,0,.45),transparent 50%),radial-gradient(at right bottom,rgba(0,0,0,.45),transparent 50%)}
 pre{position:absolute;inset:0;margin:0;padding:10px 8px 8px;overflow:hidden;white-space:pre;user-select:none;pointer-events:none;font-weight:700}
 .a{mix-blend-mode:screen;color:rgba(220,230,255,.38);text-shadow:0 0 8px rgba(255,255,255,.04),0 0 16px rgba(140,180,255,.03);z-index:2}

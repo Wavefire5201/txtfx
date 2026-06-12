@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { prepareExportContext, renderFrame, getFrameDelta, getFrameTime } from "../export/video";
 import { compositeFrame } from "../renderer";
 import { normalizeToCanvasSource } from "../canvas-util";
+import { sampleMeanColor } from "../ascii";
 import { packRGB } from "../cell-buffer";
 import { GlSceneRenderer, textToCodes } from "./renderer";
 import { fixtureScenes, loadTestImage } from "@/test/fixtures";
@@ -43,10 +44,13 @@ async function renderGl(scene: ReturnType<typeof fixtureScenes.effects>) {
     dpr: 1,
   });
   gl.setBackdrop(normalizeToCanvasSource(ec.image));
+  const [mr, mg, mb] = sampleMeanColor(ec.image);
   gl.setSceneOptions({
     baseColor: packRGB(ec.asciiColorRgb[0], ec.asciiColorRgb[1], ec.asciiColorRgb[2]),
     baseAlpha: ec.asciiOpacity,
     blendMode: ec.asciiBlendMode,
+    backdropOpacity: scene.image.opacity ?? 0.86,
+    backdropTint: packRGB((mr * 0.5) | 0, (mg * 0.5) | 0, (mb * 0.5) | 0),
   });
 
   const baseCodes = textToCodes(ec.baseText, ec.grid.cols, ec.grid.rows);

@@ -12,7 +12,7 @@ import { normalizeToCanvasSource } from "./canvas-util";
 // The scene data is injected by the export template
 declare const SCENE: {
   seed?: number;
-  image: { data: string; width: number; height: number };
+  image: { data: string; width: number; height: number; opacity?: number };
   ascii: { ramp: string; fontSize: string; fontFamily: string; lineHeight: number; letterSpacing: string; color: string; opacity: number; blendMode: string };
   mask: { data: string; feather: number };
   effects: Array<{
@@ -58,7 +58,10 @@ declare const SCENE: {
   const ps = `font-size:${s.fontSize};font-family:${s.fontFamily};line-height:${s.lineHeight};letter-spacing:${s.letterSpacing}`;
   A.setAttribute("style", A.getAttribute("style") + ";" + ps + ";color:" + s.color + ";opacity:" + s.opacity);
   F.setAttribute("style", F.getAttribute("style") + ";" + ps);
-  if (SCENE.image.data && bg) bg.style.backgroundImage = `url("${SCENE.image.data}")`;
+  if (SCENE.image.data && bg) {
+    bg.style.backgroundImage = `url("${SCENE.image.data}")`;
+    bg.style.opacity = String(SCENE.image.opacity ?? 0.86);
+  }
 
   // Measure grid
   let cols = 80, rows = 40, charW = 6, charH = 9, fontSize = 12;
@@ -231,8 +234,8 @@ declare const SCENE: {
       baseColor: parsed.packed,
       baseAlpha: parsed.alpha * (SCENE.ascii.opacity ?? 1),
       blendMode: SCENE.ascii.blendMode || "screen",
-      // Match the template's .bg layer: image at opacity .86 over #0a0a0e
-      backdropOpacity: 0.86,
+      // Image-dim setting over the page background (#0a0a0e)
+      backdropOpacity: SCENE.image.opacity ?? 0.86,
       backdropTint: 0x0a0a0e,
     });
     baseCodes = textToCodes(baseText, grid.cols, grid.rows);

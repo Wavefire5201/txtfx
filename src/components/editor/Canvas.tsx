@@ -35,6 +35,7 @@ export function Canvas() {
   // to bypass React re-renders during slider drags.
   const sceneEffects = useEditorStore((s) => s.scene.effects);
   const sceneSeed = useEditorStore((s) => s.scene.seed);
+  const imageOpacity = useEditorStore((s) => s.scene.image.opacity ?? 0.86);
   const asciiRamp = useEditorStore((s) => s.scene.ascii.ramp);
   const playbackDuration = useEditorStore((s) => s.scene.playback.duration);
   const playbackLoop = useEditorStore((s) => s.scene.playback.loop);
@@ -408,8 +409,8 @@ export function Canvas() {
       baseColor: packRGB(parsed[0], parsed[1], parsed[2]),
       baseAlpha: useEditorStore.getState().showAscii ? parsed[3] * (ascii.opacity ?? 1) : 0,
       blendMode: ascii.blendMode || "screen",
-      // Match the DOM preview's backdrop treatment (bg div at .86 over tint)
-      backdropOpacity: 0.86,
+      // Image-dim setting: image at `opacity` over the dark mean-color tint
+      backdropOpacity: useEditorStore.getState().scene.image.opacity ?? 0.86,
       backdropTint: bgTintRef.current,
     });
   }, []);
@@ -445,7 +446,11 @@ export function Canvas() {
     syncGlOptions();
     // Keep GL options live for slider drags (which bypass React via the store)
     return useEditorStore.subscribe((state, prev) => {
-      if (state.scene.ascii !== prev.scene.ascii || state.showAscii !== prev.showAscii) {
+      if (
+        state.scene.ascii !== prev.scene.ascii ||
+        state.scene.image !== prev.scene.image ||
+        state.showAscii !== prev.showAscii
+      ) {
         syncGlOptions();
       }
     });
@@ -1040,7 +1045,7 @@ export function Canvas() {
               inset: 0,
               backgroundSize: "100% 100%",
               backgroundPosition: "center",
-              opacity: 0.86,
+              opacity: imageOpacity,
               visibility: showImage && !useGl ? "visible" : "hidden",
             }}
           />

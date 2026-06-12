@@ -334,7 +334,6 @@ body {
 .viewport-canvas .hero-bg {
   background-size: 100% 100%;
   background-position: center;
-  transform: scale(1.03);
 }
 
 .viewport-canvas .ascii-overlay {

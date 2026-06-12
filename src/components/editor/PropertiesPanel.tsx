@@ -274,6 +274,7 @@ function EffectControl({
 export function PropertiesPanel() {
   const scene = useEditorStore((s) => s.scene);
   const updateAscii = useEditorStore((s) => s.updateAscii);
+  const updateImage = useEditorStore((s) => s.updateImage);
   const addEffect = useEditorStore((s) => s.addEffect);
   const toggleEffect = useEditorStore((s) => s.toggleEffect);
   const removeEffect = useEditorStore((s) => s.removeEffect);
@@ -351,6 +352,38 @@ export function PropertiesPanel() {
           max={1}
           step={0.01}
           onValueChange={([v]) => updateAscii({ opacity: v })}
+        >
+          <Slider.Track className="slider-track">
+            <Slider.Range className="slider-range" />
+          </Slider.Track>
+          <Slider.Thumb className="slider-thumb" />
+        </Slider.Root>
+        <div className="prop-row">
+          <span className="prop-label">Image opacity</span>
+          <span className="prop-value-group">
+            {(scene.image.opacity ?? 0.86) !== 0.86 && (
+              <button className="prop-reset-btn" title="Reset to default" onClick={() => updateImage({ opacity: 0.86 })}>
+                <ArrowCounterClockwise size={11} />
+              </button>
+            )}
+            <input
+              className="prop-value prop-value--input"
+              type="text"
+              value={`${Math.round((scene.image.opacity ?? 0.86) * 100)}%`}
+              onChange={(e) => {
+                const n = parseInt(e.target.value);
+                if (!Number.isNaN(n)) updateImage({ opacity: Math.max(0, Math.min(100, n)) / 100 });
+              }}
+            />
+          </span>
+        </div>
+        <Slider.Root
+          className="slider-root"
+          value={[scene.image.opacity ?? 0.86]}
+          min={0}
+          max={1}
+          step={0.01}
+          onValueChange={([v]) => updateImage({ opacity: v })}
         >
           <Slider.Track className="slider-track">
             <Slider.Range className="slider-range" />

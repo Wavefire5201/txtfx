@@ -1,7 +1,7 @@
 import type { SceneData } from "../scene";
 import type { Mask } from "../mask";
 import type { GridInfo, MaskGrid } from "../effects/types";
-import { imageToAscii } from "../ascii";
+import { imageToAscii, sampleMeanColor } from "../ascii";
 import { compositeFrame, type ActiveEffect } from "../renderer";
 import { createEffect } from "../effects";
 import { getGlowSprite } from "../glow-cache";
@@ -131,8 +131,20 @@ function drawBackdrop(
   image: ImageLike,
   width: number,
   height: number,
+  imageOpacity = 1,
 ): void {
-  drawImageCover(ctx, image, width, height);
+  if (imageOpacity < 1) {
+    // Image dim setting: image at `opacity` over a dark mean-color tint —
+    // identical semantics to the editor preview's backdrop treatment.
+    const [r, g, b] = sampleMeanColor(image);
+    ctx.fillStyle = `rgb(${(r * 0.5) | 0}, ${(g * 0.5) | 0}, ${(b * 0.5) | 0})`;
+    ctx.fillRect(0, 0, width, height);
+    ctx.globalAlpha = imageOpacity;
+    drawImageCover(ctx, image, width, height);
+    ctx.globalAlpha = 1;
+  } else {
+    drawImageCover(ctx, image, width, height);
+  }
 
   const corners: [number, number][] = [[0, 0], [width, 0], [0, height], [width, height]];
   const r = Math.max(width, height) * 0.5;
@@ -289,7 +301,7 @@ export async function prepareExportContext(
   const asciiParsed = parseColor(scene.ascii.color) ?? [220, 230, 255, 0.38];
   const asciiColorRgb = asciiParsed.slice(0, 3);
   const asciiOpacity = asciiParsed[3] * (scene.ascii.opacity ?? 1);
-  drawBackdrop(backdropCtx, source, width, height);
+  drawBackdrop(backdropCtx, source, width, height, scene.image.opacity ?? 0.86);
 
   const baseLines = baseText.split("\n");
   const baseLayerCanvas = createAnyCanvas(width, height);

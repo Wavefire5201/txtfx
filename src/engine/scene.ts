@@ -8,6 +8,8 @@ export interface SceneData {
     data: string;
     width: number;
     height: number;
+    /** Backdrop image opacity over its dark tint (0-1). Default 0.86. */
+    opacity?: number;
   };
   ascii: {
     ramp: string;
@@ -49,7 +51,7 @@ export function createDefaultScene(): SceneData {
   return {
     version: 1,
     seed: 1,
-    image: { data: "", width: 0, height: 0 },
+    image: { data: "", width: 0, height: 0, opacity: 0.86 },
     ascii: {
       ramp: " .`,:;cbaO0%#@",
       fontSize: "0.85vw",
