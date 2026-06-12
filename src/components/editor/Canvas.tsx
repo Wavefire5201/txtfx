@@ -10,6 +10,9 @@ import { compositeFrame, collectHoles, holesChanged, punchHoles, type ActiveEffe
 import { drawEffectCells, type EffectCanvasLayout } from "@/engine/effect-canvas";
 import type { GridInfo, MaskGrid } from "@/engine/effects/types";
 import { withSeed } from "@/engine/prng";
+import { GlSceneRenderer, textToCodes } from "@/engine/gl/renderer";
+import { packRGB } from "@/engine/cell-buffer";
+import { parseColor } from "@/engine/export/video";
 import { ImageSquare, UploadSimple, ChartLine, Minus, Plus, ArrowCounterClockwise } from "@phosphor-icons/react";
 import { toast } from "./Toast";
 import type { TypewriterEffect } from "@/engine/effects/typewriter";
@@ -61,6 +64,11 @@ export function Canvas() {
   const [displayRect, setDisplayRect] = useState({ x: 0, y: 0, w: 0, h: 0 });
   const [draggingOver, setDraggingOver] = useState(false);
   const [showPerf, setShowPerf] = useState(true);
+  // GL renderer A/B toggle (?gl=1 enables; HUD button flips live)
+  const [useGl, setUseGl] = useState(false);
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("gl") === "1") setUseGl(true);
+  }, []);
   const [perfText, setPerfText] = useState("0 fps · render 0.0ms · 0 cells");
 
   const imgRef = useRef<HTMLImageElement | null>(null);
@@ -86,6 +94,9 @@ export function Canvas() {
   const preStyleRef = useRef<{ font: string; padLeft: number; padTop: number } | null>(null);
   const prevHolesRef = useRef<Set<number>>(new Set());
   const basePunchedRef = useRef(false);
+  const glCanvasRef = useRef<HTMLCanvasElement>(null);
+  const glRendererRef = useRef<GlSceneRenderer | null>(null);
+  const baseCodesRef = useRef<Uint32Array | null>(null);
 
   // Restore auto-saved scene on mount
   useEffect(() => {
@@ -359,6 +370,85 @@ export function Canvas() {
     });
   }, [imageUrl]);
 
+  // GL renderer lifecycle: create/dispose with the toggle; keep font,
+  // backdrop, viewport, and scene options in sync.
+  useEffect(() => {
+    if (!useGl) {
+      glRendererRef.current?.dispose();
+      glRendererRef.current = null;
+      return;
+    }
+    const canvas = glCanvasRef.current;
+    if (!canvas) return;
+    try {
+      glRendererRef.current = new GlSceneRenderer(canvas);
+    } catch (err) {
+      console.warn("[txtfx] WebGL2 unavailable, staying on 2D renderer:", err);
+      setUseGl(false);
+      return;
+    }
+    return () => {
+      glRendererRef.current?.dispose();
+      glRendererRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [useGl, imageUrl]);
+
+  // Sync GL inputs whenever layout/scene knobs change
+  useEffect(() => {
+    const renderer = glRendererRef.current;
+    if (!useGl || !renderer) return;
+    if (displayRect.w > 0) renderer.setViewport(displayRect.w, displayRect.h, window.devicePixelRatio || 1);
+    if (grid.cols > 0 && asciiRef.current) {
+      const family = getComputedStyle(asciiRef.current).fontFamily || "monospace";
+      renderer.setFont({
+        fontSize: grid.fontSize,
+        fontFamily: family,
+        charW: grid.charW,
+        charH: grid.charH,
+        dpr: window.devicePixelRatio || 1,
+      });
+      baseCodesRef.current = textToCodes(asciiTextRef.current, grid.cols, grid.rows);
+    }
+    if (imgRef.current) renderer.setBackdrop(showImage ? imgRef.current : null);
+    const ascii = useEditorStore.getState().scene.ascii;
+    const parsed = parseColor(ascii.color) ?? [220, 230, 255, 0.38];
+    renderer.setSceneOptions({
+      baseColor: packRGB(parsed[0], parsed[1], parsed[2]),
+      baseAlpha: showAscii ? parsed[3] * (ascii.opacity ?? 1) : 0,
+      blendMode: ascii.blendMode || "screen",
+    });
+  });
+
+  function renderGlFrame(buffers: NonNullable<ReturnType<typeof compositeFrame>["buffers"]>) {
+    const renderer = glRendererRef.current;
+    if (!renderer || !baseCodesRef.current) return;
+    if (renderer.isContextLost()) return;
+    renderer.renderFrame({
+      grid,
+      baseCodes: baseCodesRef.current,
+      composite: buffers,
+      showEffects,
+    });
+  }
+
+  /** One frame through whichever renderer is active. */
+  function renderComposite(dt: number, now: number) {
+    const currentMask = maskGridRef.current;
+    if (useGl && glRendererRef.current) {
+      const result = compositeFrame(effectsRef.current, dt, now, currentMask, grid, asciiTextRef.current, {
+        buildText: false,
+        exposeBuffers: true,
+      });
+      perfCells.current = result.glowCount;
+      if (result.buffers) renderGlFrame(result.buffers);
+      return;
+    }
+    const result = compositeFrame(effectsRef.current, dt, now, currentMask, grid, asciiTextRef.current, { buildText: false });
+    perfCells.current = result.glowCount;
+    renderGlow(result.glowCells, result.glowCount);
+  }
+
   // (Re)build the mask grid on structural changes (clear, undo, restore,
   // grid/image resize). Brush strokes update it incrementally in paintStroke
   // and only bump maskVersion at stroke END — the full O(image) rebuild per
@@ -541,11 +631,7 @@ export function Canvas() {
     // Respect reduced-motion: render a single static frame instead of animating
     const prefersReducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (prefersReducedMotion) {
-      if (grid.cols > 0) {
-        const currentMask = maskGridRef.current;
-        const result = compositeFrame(effectsRef.current, 0, currentTime, currentMask, grid, asciiTextRef.current, { buildText: false });
-        renderGlow(result.glowCells, result.glowCount);
-      }
+      if (grid.cols > 0) renderComposite(0, currentTime);
       return;
     }
     wasPlayingRef.current = true;
@@ -603,10 +689,7 @@ export function Canvas() {
 
         if (grid.cols > 0) {
           const renderStart = performance.now();
-          const currentMask = maskGridRef.current;
-          const result = compositeFrame(effectsRef.current, dt, now, currentMask, grid, asciiTextRef.current, { buildText: false });
-          perfCells.current = result.glowCount;
-          renderGlow(result.glowCells, result.glowCount);
+          renderComposite(dt, now);
           perfGlow.current += performance.now() - renderStart;
         }
 
@@ -645,7 +728,7 @@ export function Canvas() {
     // store getState inside the loop; depending on them would restart the
     // animation loop every frame and break resume-from-pause.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playing, grid, playbackDuration, playbackLoop, playbackFps]);
+  }, [playing, grid, playbackDuration, playbackLoop, playbackFps, useGl]);
 
   // When scrubbing while paused or editing effects while paused, re-render.
   useEffect(() => {
@@ -675,13 +758,11 @@ export function Canvas() {
     }
 
     // Re-render current state (dt=0 so no state advancement)
-    const currentMask = maskGridRef.current;
-    const result = compositeFrame(effectsRef.current, 0, currentTime, currentMask, grid, asciiTextRef.current, { buildText: false });
-    renderGlow(result.glowCells, result.glowCount);
+    renderComposite(0, currentTime);
     // renderGlow/simulateToTime are recreated each render but behaviorally
     // stable; including them would re-simulate (and re-randomize) on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [playing, currentTime, grid, sceneEffects]);
+  }, [playing, currentTime, grid, sceneEffects, useGl]);
 
   // Auto-play when effects are added
   useEffect(() => {
@@ -930,7 +1011,7 @@ export function Canvas() {
               backgroundPosition: "center",
               transform: "scale(1.03)",
               opacity: 0.86,
-              visibility: showImage ? "visible" : "hidden",
+              visibility: showImage && !useGl ? "visible" : "hidden",
             }}
           />
           <div
@@ -952,7 +1033,7 @@ export function Canvas() {
               position: "absolute",
               inset: 0,
               zIndex: 2,
-              visibility: showAscii ? "visible" : "hidden",
+              visibility: showAscii && !useGl ? "visible" : "hidden",
             }}
           />
           <canvas
@@ -965,7 +1046,19 @@ export function Canvas() {
               height: "100%",
               zIndex: 4,
               pointerEvents: "none",
-              visibility: showEffects ? "visible" : "hidden",
+              visibility: showEffects && !useGl ? "visible" : "hidden",
+            }}
+          />
+          <canvas
+            ref={glCanvasRef}
+            style={{
+              position: "absolute",
+              inset: 0,
+              width: "100%",
+              height: "100%",
+              zIndex: 2,
+              pointerEvents: "none",
+              visibility: useGl ? "visible" : "hidden",
             }}
           />
           <canvas
@@ -1010,6 +1103,15 @@ export function Canvas() {
             aria-pressed={showPerf}
           >
             <ChartLine size={13} />
+          </button>
+          <button
+            className="perf-toggle-btn"
+            onClick={() => setUseGl((v) => !v)}
+            title={useGl ? "Switch to 2D renderer" : "Switch to WebGL renderer"}
+            aria-pressed={useGl}
+            style={{ fontSize: 9, fontWeight: 700, color: useGl ? "var(--accent, #7defa0)" : undefined }}
+          >
+            GL
           </button>
           <div
             className="perf-panel-clip"

@@ -27,6 +27,20 @@ export interface CompositeResult {
   text: string;
   glowCells: GlowCell[];
   glowCount: number;
+  /** Zero-copy views of the composited grid (set when exposeBuffers). Valid until the next compositeFrame call. */
+  buffers?: CompositeBuffers;
+}
+
+export interface CompositeBuffers {
+  /** Winning cell code point per grid cell, 0 = none. */
+  cellCodes: Uint32Array;
+  /** Packed 0xFFRRGGBB per cell, 0 = uncolored. */
+  cellColors: Uint32Array;
+  /** Base char code point for applyToAscii winners (these cells are base-text holes), 0 = none. */
+  asciiCodes: Uint32Array;
+  brightness: Float32Array;
+  /** Glow radius per cell, -1 = effect default. */
+  glowRadius: Float64Array;
 }
 
 export interface CompositeOptions {
@@ -42,6 +56,8 @@ export interface CompositeOptions {
    * canvas, and including them in both would double the glyphs.
    */
   textExcludesColored?: boolean;
+  /** Expose zero-copy views of the composited grid (GL renderer hot path). */
+  exposeBuffers?: boolean;
 }
 
 // Reusable buffers - resized only when grid dimensions change
@@ -233,7 +249,17 @@ export function compositeFrame(
     }
   }
 
-  return { text, glowCells: _glowPool, glowCount: _glowCount };
+  const result: CompositeResult = { text, glowCells: _glowPool, glowCount: _glowCount };
+  if (options.exposeBuffers) {
+    result.buffers = {
+      cellCodes,
+      cellColors,
+      asciiCodes,
+      brightness: brightMap,
+      glowRadius: radiusVals,
+    };
+  }
+  return result;
 }
 
 // ---------------------------------------------------------------------------

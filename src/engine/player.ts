@@ -5,6 +5,9 @@ import { compositeFrame, collectHoles, holesChanged, punchHoles, type ActiveEffe
 import { drawEffectCells } from "./effect-canvas";
 import { createPlayerLoop, PlaybackClock, debounce, shouldRun } from "./player-core";
 import { withSeed } from "./prng";
+import { GlSceneRenderer, textToCodes } from "./gl/renderer";
+import { parseCssColorPacked } from "./effects/color-util";
+import { normalizeToCanvasSource } from "./canvas-util";
 
 // The scene data is injected by the export template
 declare const SCENE: {
@@ -27,8 +30,28 @@ declare const SCENE: {
   const A = document.getElementById("A") as HTMLPreElement;
   const F = document.getElementById("F") as HTMLPreElement;
   const G = document.getElementById("G") as HTMLCanvasElement;
+  const GLC = document.getElementById("GLC") as HTMLCanvasElement | null;
   const bg = document.getElementById("bg") as HTMLDivElement;
   if (!A || !F) return;
+
+  // WebGL renderer (one canvas replaces bg/base/effects/glow layers).
+  // Browsers without WebGL2 keep the DOM+2D-canvas path below.
+  let glr: GlSceneRenderer | null = null;
+  if (GLC) {
+    try {
+      glr = new GlSceneRenderer(GLC);
+      // A is still MEASURED for the grid (getBoundingClientRect) — hide it with
+      // visibility so its geometry survives; display:none would zero the rect.
+      A.style.visibility = "hidden";
+      F.style.visibility = "hidden";
+      for (const el of [G, bg, document.querySelector(".vig") as HTMLElement | null]) {
+        if (el) el.style.display = "none";
+      }
+    } catch {
+      glr = null;
+      GLC.style.display = "none";
+    }
+  }
 
   // Apply styles
   const s = SCENE.ascii;
@@ -62,11 +85,13 @@ declare const SCENE: {
 
   // Build ASCII from image
   let baseText = "";
+  let srcImage: HTMLImageElement | null = null;
   function buildAscii(cb: () => void) {
     if (!SCENE.image.data) { cb(); return; }
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = () => {
+      srcImage = img;
       measure();
       const cv = document.createElement("canvas");
       cv.width = cols; cv.height = rows;
@@ -191,7 +216,36 @@ declare const SCENE: {
     padTop = parseFloat(style.paddingTop) || 10;
   }
 
+  let baseCodes: Uint32Array | null = null;
+  function configureGl() {
+    if (!glr || !GLC) return;
+    const wrap = GLC.parentElement!;
+    const rect = wrap.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    glr.setViewport(rect.width, rect.height, dpr);
+    const family = getComputedStyle(A).fontFamily || SCENE.ascii.fontFamily;
+    glr.setFont({ fontSize, fontFamily: family, charW, charH, dpr });
+    glr.setBackdrop(srcImage ? normalizeToCanvasSource(srcImage) : null);
+    const parsed = parseCssColorPacked(SCENE.ascii.color) ?? { packed: 0xffdce6ff, alpha: 0.38 };
+    glr.setSceneOptions({
+      baseColor: parsed.packed,
+      baseAlpha: parsed.alpha * (SCENE.ascii.opacity ?? 1),
+      blendMode: SCENE.ascii.blendMode || "screen",
+    });
+    baseCodes = textToCodes(baseText, grid.cols, grid.rows);
+  }
+
   function renderFrame(dt: number, t: number) {
+    if (glr && baseCodes) {
+      const result = compositeFrame(activeEffects, dt, t, maskGrid, grid, baseText, {
+        buildText: false,
+        exposeBuffers: true,
+      });
+      if (result.buffers && !glr.isContextLost()) {
+        glr.renderFrame({ grid, baseCodes, composite: result.buffers });
+      }
+      return;
+    }
     const result = compositeFrame(activeEffects, dt, t, maskGrid, grid, baseText, { textExcludesColored: true });
 
     if (result.text !== lastFText) {
@@ -284,6 +338,7 @@ declare const SCENE: {
     initEffects();
     baseLines = baseText ? baseText.split("\n") : [];
     refreshLayoutCache();
+    configureGl();
     lastFText = "";
     prevHoles = new Set();
     lastT = 0;

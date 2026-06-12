@@ -68,6 +68,17 @@ export function readColorsPacked(params: Record<string, unknown>, defaultColor: 
   return readColors(params, defaultColor).map(packHex);
 }
 
+/** Parses #rgb/#rrggbb/rgb()/rgba() into packed color + alpha (bundle-light). */
+export function parseCssColorPacked(color: string): { packed: number; alpha: number } | null {
+  if (color.startsWith("#")) return { packed: packHex(color), alpha: 1 };
+  const m = color.match(/rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)(?:\s*,\s*([\d.]+))?/);
+  if (!m) return null;
+  return {
+    packed: packRGB(parseInt(m[1]), parseInt(m[2]), parseInt(m[3])),
+    alpha: m[4] !== undefined ? parseFloat(m[4]) : 1,
+  };
+}
+
 function parseHex(hex: string): [number, number, number] {
   const h = hex.replace("#", "");
   return [
