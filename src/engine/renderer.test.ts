@@ -29,6 +29,7 @@ class StubEffect implements AsciiEffect {
       );
     }
   }
+  reset() {}
   getControls(): ControlDescriptor[] {
     return [];
   }

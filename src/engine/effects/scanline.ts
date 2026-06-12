@@ -1,6 +1,7 @@
 import type { AsciiEffect, GridInfo, MaskGrid, ControlDescriptor } from "./types";
 import { type ColorMode, pickColorPacked, readColorsPacked, readColorMode, colorControls } from "./color-util";
 import { type CellBuffer } from "../cell-buffer";
+import { mulberry32, readSeed } from "../prng";
 
 export class ScanlineEffect implements AsciiEffect {
   type = "scanline";
@@ -13,17 +14,36 @@ export class ScanlineEffect implements AsciiEffect {
   private colorMode: ColorMode = "random";
   private glowRadius = 16;
   private chars = "=-~";
+  private seed = 1;
+  private rng: () => number = mulberry32(1);
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
+    const newSeed = readSeed(params);
+    const needsRegen = this.grid.cols === 0
+      || newSeed !== this.seed
+      || grid.cols !== this.grid.cols
+      || grid.rows !== this.grid.rows;
+
     this.grid = grid;
     this.speed = (params.speed as number) ?? 8;
     this.width = (params.width as number) ?? 2;
     this.brightness = (params.brightness as number) ?? 1;
     this.count = (params.count as number) ?? 1;
+    this.seed = newSeed;
     this.colors = readColorsPacked(params, "#88ccff");
     this.colorMode = readColorMode(params);
     this.glowRadius = (params.glowRadius as number) ?? 16;
     this.chars = (params.chars as string) ?? "=-~";
+
+    if (needsRegen) this.regen();
+  }
+
+  private regen(): void {
+    this.rng = mulberry32(this.seed);
+  }
+
+  reset(): void {
+    this.regen();
   }
 
   update(_dt: number, time: number, _mask: MaskGrid, out: CellBuffer): void {
@@ -36,7 +56,7 @@ export class ScanlineEffect implements AsciiEffect {
 
       // Pick color per scanline
       const baseColor = pickColorPacked(this.colors, this.colorMode === "gradient" ? "random" : this.colorMode,
-        this.colorMode === "random" ? Math.floor(Math.random() * this.colors.length) : s);
+        this.colorMode === "random" ? Math.floor(this.rng() * this.colors.length) : s);
 
       for (let w = 0; w < this.width; w++) {
         const r = Math.floor(headRow + w);

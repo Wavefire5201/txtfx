@@ -4,6 +4,7 @@ import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createEffect } from "./effects";
 import { CellBuffer, cellBufferToArray } from "./cell-buffer";
+import { SEED_PARAM } from "./prng";
 import type { EffectType, GridInfo, MaskGrid } from "./effects/types";
 import { seedMathRandom } from "@/test/fixtures";
 
@@ -49,10 +50,13 @@ function serializeCells(
 }
 
 function captureSnapshot(type: EffectType): Record<string, string[]> {
+  // Math.random stub is now only a safety net — seeded effects draw from
+  // their own PRNG (SEED_PARAM); any remaining Math.random use is a bug
+  // this stub keeps deterministic enough to catch via snapshot drift.
   const restore = seedMathRandom(20260612);
   try {
     const fx = createEffect(type);
-    fx.init(GRID, { intervalMin: 1, intervalMax: 2 });
+    fx.init(GRID, { intervalMin: 1, intervalMax: 2, [SEED_PARAM]: 20260612 });
     if ("setBaseText" in fx) {
       (fx as unknown as { setBaseText(t: string): void }).setBaseText(BASE_TEXT);
     }

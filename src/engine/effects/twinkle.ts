@@ -1,6 +1,7 @@
 import type { AsciiEffect, GridInfo, MaskGrid, ControlDescriptor } from "./types";
 import { type ColorMode, pickColorPacked, readColorsPacked, readColorMode, colorControls, WHITE_PACKED } from "./color-util";
 import { type CellBuffer } from "../cell-buffer";
+import { mulberry32, readSeed } from "../prng";
 
 // Character code points
 const CODE_STAR = "*".codePointAt(0)!;
@@ -32,16 +33,21 @@ export class TwinkleEffect implements AsciiEffect {
   private colorMode: ColorMode = "random";
   private prevColorMode: ColorMode = "random";
   private glowRadius = 18;
+  private seed = 1;
+  private rng: () => number = mulberry32(1);
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
     const newCount = (params.count as number) ?? 50;
+    const newSeed = readSeed(params);
     const needsRegen = this.grid.cols === 0
       || newCount !== this.count
+      || newSeed !== this.seed
       || grid.cols !== this.grid.cols
       || grid.rows !== this.grid.rows;
 
     this.grid = grid;
     this.count = newCount;
+    this.seed = newSeed;
     this.speedMin = (params.speedMin as number) ?? 0.5;
     this.speedMax = (params.speedMax as number) ?? 2.3;
     this.bigChance = (params.bigChance as number) ?? 0.35;
@@ -50,21 +56,7 @@ export class TwinkleEffect implements AsciiEffect {
     this.glowRadius = (params.glowRadius as number) ?? 18;
 
     if (needsRegen) {
-      // Structural change — regenerate all stars
-      this.stars = Array.from({ length: this.count }, (_, i) => {
-        const colorIdx = this.colorMode === "random"
-          ? Math.floor(Math.random() * this.colors.length)
-          : i;
-        return {
-          c: Math.floor(Math.random() * grid.cols),
-          r: Math.floor(Math.random() * grid.rows),
-          phase: Math.random() * Math.PI * 2,
-          speed: this.speedMin + Math.random() * (this.speedMax - this.speedMin),
-          big: Math.random() < this.bigChance,
-          color: pickColorPacked(this.colors, this.colorMode, colorIdx),
-          colorIdx,
-        };
-      });
+      this.regen();
     } else {
       // Visual change — update colors. Only reassign colorIdx if palette or mode changed.
       const paletteChanged = this.colors.length !== this.prevColors.length
@@ -75,16 +67,39 @@ export class TwinkleEffect implements AsciiEffect {
         const s = this.stars[i];
         if (paletteChanged) {
           s.colorIdx = this.colorMode === "random"
-            ? Math.floor(Math.random() * this.colors.length)
+            ? Math.floor(this.rng() * this.colors.length)
             : i;
         }
-        if (bigChanceChanged) s.big = Math.random() < this.bigChance;
+        if (bigChanceChanged) s.big = this.rng() < this.bigChance;
         s.color = pickColorPacked(this.colors, this.colorMode, s.colorIdx);
       }
     }
     this.prevColors = [...this.colors];
     this.prevColorMode = this.colorMode;
     this.prevBigChance = this.bigChance;
+  }
+
+  private regen(): void {
+    this.rng = mulberry32(this.seed);
+    // Structural change — regenerate all stars
+    this.stars = Array.from({ length: this.count }, (_, i) => {
+      const colorIdx = this.colorMode === "random"
+        ? Math.floor(this.rng() * this.colors.length)
+        : i;
+      return {
+        c: Math.floor(this.rng() * this.grid.cols),
+        r: Math.floor(this.rng() * this.grid.rows),
+        phase: this.rng() * Math.PI * 2,
+        speed: this.speedMin + this.rng() * (this.speedMax - this.speedMin),
+        big: this.rng() < this.bigChance,
+        color: pickColorPacked(this.colors, this.colorMode, colorIdx),
+        colorIdx,
+      };
+    });
+  }
+
+  reset(): void {
+    this.regen();
   }
 
   update(_dt: number, time: number, _mask: MaskGrid, out: CellBuffer): void {

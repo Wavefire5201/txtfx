@@ -4,9 +4,11 @@ import type { MaskRegion } from "./effects/types";
 import { compositeFrame, collectHoles, holesChanged, punchHoles, type ActiveEffect } from "./renderer";
 import { drawEffectCells } from "./effect-canvas";
 import { createPlayerLoop, PlaybackClock, debounce, shouldRun } from "./player-core";
+import { withSeed } from "./prng";
 
 // The scene data is injected by the export template
 declare const SCENE: {
+  seed?: number;
   image: { data: string; width: number; height: number };
   ascii: { ramp: string; fontSize: string; fontFamily: string; lineHeight: number; letterSpacing: string; color: string; opacity: number; blendMode: string };
   mask: { data: string; feather: number };
@@ -148,11 +150,12 @@ declare const SCENE: {
   function initEffects() {
     grid.cols = cols; grid.rows = rows; grid.charW = charW; grid.charH = charH; grid.fontSize = fontSize;
     activeEffects = [];
-    for (const cfg of SCENE.effects) {
+    for (let i = 0; i < SCENE.effects.length; i++) {
+      const cfg = SCENE.effects[i];
       if (!cfg.enabled) continue;
       try {
         const instance = createEffect(cfg.type);
-        instance.init(grid, cfg.params || {});
+        instance.init(grid, withSeed(cfg.params || {}, SCENE.seed, i));
         // Feed base text to text-dependent effects
         const withBaseText = instance as AsciiEffect & { setBaseText?: (text: string) => void };
         if (typeof withBaseText.setBaseText === "function") {
@@ -246,7 +249,11 @@ declare const SCENE: {
     }
     const t = loopPlayback && dur > 0 ? el % dur : Math.min(el, dur);
     const dt = Math.min(0.05, Math.abs(t - lastT));
-    if (t < lastT - 0.1) initEffects(); // loop wrap re-seeds effect state
+    if (t < lastT - 0.1) {
+      // Loop wrap: reset() restores the exact t=0 state (seeded), so every
+      // pass of the loop plays identically — no re-randomization.
+      for (const fx of activeEffects) fx.instance.reset();
+    }
     lastT = t;
     renderFrame(dt, t);
   }

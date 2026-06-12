@@ -2,6 +2,8 @@ import type { EffectType, MaskRegion } from "./effects/types";
 
 export interface SceneData {
   version: number;
+  /** Base seed for deterministic effects (per-effect streams derive from it). */
+  seed?: number;
   image: {
     data: string;
     width: number;
@@ -46,6 +48,7 @@ export interface EffectConfig {
 export function createDefaultScene(): SceneData {
   return {
     version: 1,
+    seed: 1,
     image: { data: "", width: 0, height: 0 },
     ascii: {
       ramp: " .`,:;cbaO0%#@",

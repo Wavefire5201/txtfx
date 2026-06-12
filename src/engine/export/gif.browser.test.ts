@@ -43,6 +43,17 @@ describe("GIF export", () => {
     expect(hasRed).toBe(true);
   });
 
+  it("exports byte-identical GIFs for the same seeded scene (reproducible exports)", async () => {
+    // No Math.random stubbing — determinism must come from scene seeding alone.
+    const img = await loadTestImage(W, H);
+    const scene = lateRedFireworkScene();
+    const opts = { width: W, height: H, fps: 5, maxColors: 32, maxDuration: 2 } as const;
+    const a = await exportGif(scene, img, null, opts);
+    const b = await exportGif(scene, img, null, opts);
+    expect(a.size).toBe(b.size);
+    expect(new Uint8Array(await a.arrayBuffer())).toEqual(new Uint8Array(await b.arrayBuffer()));
+  });
+
   it("exports a GIF end-to-end with monotonic progress", async () => {
     restoreRandom = seedMathRandom(42);
     const img = await loadTestImage(W, H);

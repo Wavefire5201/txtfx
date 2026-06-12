@@ -58,3 +58,4 @@ package-lock.json
 src/test/goldens/*.actual.png
 .playwright-mcp/
 .vitest-attachments/
+**/__screenshots__/

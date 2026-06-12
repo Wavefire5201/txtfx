@@ -1,6 +1,7 @@
 import type { AsciiEffect, GridInfo, MaskGrid, ControlDescriptor } from "./types";
 import { type ColorMode, pickColorPacked, readColorsPacked, readColorMode, colorControls } from "./color-util";
 import { type CellBuffer } from "../cell-buffer";
+import { mulberry32, readSeed } from "../prng";
 
 export class TypewriterEffect implements AsciiEffect {
   type = "typewriter";
@@ -11,14 +12,33 @@ export class TypewriterEffect implements AsciiEffect {
   private colors: number[] = [];
   private colorMode: ColorMode = "random";
   private glowRadius = 12;
+  private seed = 1;
+  private rng: () => number = mulberry32(1);
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
+    const newSeed = readSeed(params);
+    const needsRegen = this.grid.cols === 0
+      || newSeed !== this.seed
+      || grid.cols !== this.grid.cols
+      || grid.rows !== this.grid.rows;
+
     this.grid = grid;
+    this.seed = newSeed;
     this.speed = (params.speed as number) ?? 80;
     this.cursor = (params.cursor as string) ?? "_";
     this.colors = readColorsPacked(params, "#ffffff");
     this.colorMode = readColorMode(params);
     this.glowRadius = (params.glowRadius as number) ?? 12;
+
+    if (needsRegen) this.regen();
+  }
+
+  private regen(): void {
+    this.rng = mulberry32(this.seed);
+  }
+
+  reset(): void {
+    this.regen();
   }
 
   setBaseText(text: string): void {

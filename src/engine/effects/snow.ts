@@ -1,6 +1,7 @@
 import type { AsciiEffect, GridInfo, MaskGrid, ControlDescriptor } from "./types";
 import { type ColorMode, pickColorPacked, readColorsPacked, readColorMode, colorControls } from "./color-util";
 import { type CellBuffer } from "../cell-buffer";
+import { mulberry32, readSeed } from "../prng";
 
 const SNOW_CHARS = ["*", "·", "."];
 const SNOW_CODES: number[] = [...SNOW_CHARS].map((c) => c.codePointAt(0)!);
@@ -30,9 +31,13 @@ export class SnowEffect implements AsciiEffect {
   private colors: number[] = [];
   private colorMode: ColorMode = "random";
   private glowRadius = 12;
+  private seed = 1;
+  private rng: () => number = mulberry32(1);
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
+    const newSeed = readSeed(params);
     const needsRegen = this.grid.cols === 0
+      || newSeed !== this.seed
       || grid.cols !== this.grid.cols
       || grid.rows !== this.grid.rows;
 
@@ -44,13 +49,21 @@ export class SnowEffect implements AsciiEffect {
     this.colors = readColorsPacked(params, "#ffffff");
     this.colorMode = readColorMode(params);
     this.glowRadius = (params.glowRadius as number) ?? 12;
+    this.seed = newSeed;
     this.grid = grid;
 
-    if (needsRegen) {
-      this.flakes = [];
-      this.spawnAccum = 0;
-      this.spawnCounter = 0;
-    }
+    if (needsRegen) this.regen();
+  }
+
+  private regen(): void {
+    this.rng = mulberry32(this.seed);
+    this.flakes = [];
+    this.spawnAccum = 0;
+    this.spawnCounter = 0;
+  }
+
+  reset(): void {
+    this.regen();
   }
 
   update(dt: number, time: number, _mask: MaskGrid, out: CellBuffer): void {
@@ -61,17 +74,17 @@ export class SnowEffect implements AsciiEffect {
     this.spawnAccum -= spawnCount;
     for (let i = 0; i < spawnCount; i++) {
       const idx = this.colorMode === "random"
-        ? Math.floor(Math.random() * this.colors.length)
+        ? Math.floor(this.rng() * this.colors.length)
         : this.spawnCounter;
       this.flakes.push({
-        col: Math.random() * cols,
+        col: this.rng() * cols,
         y: -1,
-        speed: this.speedMin + Math.random() * (this.speedMax - this.speedMin),
-        drift: this.driftAmount * (Math.random() - 0.5) * 2,
-        phase: Math.random() * Math.PI * 2,
-        code: SNOW_CODES[Math.floor(Math.random() * SNOW_CODES.length)],
+        speed: this.speedMin + this.rng() * (this.speedMax - this.speedMin),
+        drift: this.driftAmount * (this.rng() - 0.5) * 2,
+        phase: this.rng() * Math.PI * 2,
+        code: SNOW_CODES[Math.floor(this.rng() * SNOW_CODES.length)],
         color: pickColorPacked(this.colors, this.colorMode === "gradient" ? "random" : this.colorMode, idx),
-        baseBrightness: 0.55 + Math.random() * 0.35,
+        baseBrightness: 0.55 + this.rng() * 0.35,
       });
       this.spawnCounter++;
     }

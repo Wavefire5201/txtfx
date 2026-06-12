@@ -1,6 +1,7 @@
 import type { AsciiEffect, GridInfo, MaskGrid, ControlDescriptor } from "./types";
 import { type ColorMode, pickColorPacked, readColorsPacked, readColorMode, colorControls } from "./color-util";
 import { type CellBuffer } from "../cell-buffer";
+import { mulberry32, readSeed } from "../prng";
 
 const GLITCH_CHARS = "@#$%&*!?/\\|[]{}()<>~^";
 const GLITCH_CODES: number[] = [...GLITCH_CHARS].map((c) => c.codePointAt(0)!);
@@ -28,13 +29,18 @@ export class GlitchEffect implements AsciiEffect {
   private colors: number[] = [];
   private colorMode: ColorMode = "random";
   private glowRadius = 0;
+  private seed = 1;
+  private rng: () => number = mulberry32(1);
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
+    const newSeed = readSeed(params);
     const needsRegen = this.grid.cols === 0
+      || newSeed !== this.seed
       || grid.cols !== this.grid.cols
       || grid.rows !== this.grid.rows;
 
     this.grid = grid;
+    this.seed = newSeed;
     this.frequency = (params.frequency as number) ?? 0.5;
     this.blockSize = (params.blockSize as number) ?? 8;
     // Legacy `intensity` is supported as a fallback so older saved scenes keep working
@@ -43,11 +49,19 @@ export class GlitchEffect implements AsciiEffect {
     this.colorMode = readColorMode(params);
     this.glowRadius = (params.glowRadius as number) ?? 0;
 
-    if (needsRegen) {
-      this.blocks = [];
-      this.nextSpawn = 0;
-      this.spawnCounter = 0;
-    }
+    if (needsRegen) this.regen();
+  }
+
+  private regen(): void {
+    this.rng = mulberry32(this.seed);
+    this.blocks = [];
+    this.nextSpawn = 0;
+    this.lastTime = 0;
+    this.spawnCounter = 0;
+  }
+
+  reset(): void {
+    this.regen();
   }
 
   update(dt: number, time: number, _mask: MaskGrid, out: CellBuffer): void {
@@ -60,22 +74,22 @@ export class GlitchEffect implements AsciiEffect {
     this.lastTime = time;
 
     if (time > this.nextSpawn) {
-      const w = 2 + Math.floor(Math.random() * this.blockSize);
-      const h = 1 + Math.floor(Math.random() * Math.max(1, this.blockSize / 3));
+      const w = 2 + Math.floor(this.rng() * this.blockSize);
+      const h = 1 + Math.floor(this.rng() * Math.max(1, this.blockSize / 3));
       const idx = this.colorMode === "random"
-        ? Math.floor(Math.random() * this.colors.length)
+        ? Math.floor(this.rng() * this.colors.length)
         : this.spawnCounter;
       this.blocks.push({
-        col: Math.floor(Math.random() * Math.max(1, cols - w)),
-        row: Math.floor(Math.random() * Math.max(1, rows - h)),
+        col: Math.floor(this.rng() * Math.max(1, cols - w)),
+        row: Math.floor(this.rng() * Math.max(1, rows - h)),
         w,
         h,
         life: 0,
-        maxLife: 0.05 + Math.random() * 0.2,
+        maxLife: 0.05 + this.rng() * 0.2,
         color: pickColorPacked(this.colors, this.colorMode === "gradient" ? "random" : this.colorMode, idx),
       });
       this.spawnCounter++;
-      this.nextSpawn = time + (1 / this.frequency) * (0.5 + Math.random());
+      this.nextSpawn = time + (1 / this.frequency) * (0.5 + this.rng());
     }
 
     for (let i = this.blocks.length - 1; i >= 0; i--) {
@@ -89,9 +103,9 @@ export class GlitchEffect implements AsciiEffect {
 
       for (let r = b.row; r < b.row + b.h && r < rows; r++) {
         for (let c = b.col; c < b.col + b.w && c < cols; c++) {
-          if (Math.random() > this.density) continue;
-          const chCode = GLITCH_CODES[Math.floor(Math.random() * GLITCH_CODES.length)];
-          out.push(r, c, chCode, 0.8 + Math.random() * 0.2, b.color, this.glowRadius);
+          if (this.rng() > this.density) continue;
+          const chCode = GLITCH_CODES[Math.floor(this.rng() * GLITCH_CODES.length)];
+          out.push(r, c, chCode, 0.8 + this.rng() * 0.2, b.color, this.glowRadius);
         }
       }
     }

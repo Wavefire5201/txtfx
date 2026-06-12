@@ -1,6 +1,7 @@
 import type { AsciiEffect, GridInfo, MaskGrid, ControlDescriptor } from "./types";
 import { type ColorMode, pickColorPacked, readColorsPacked, readColorMode, colorControls } from "./color-util";
 import { type CellBuffer } from "../cell-buffer";
+import { mulberry32, readSeed } from "../prng";
 
 interface Particle {
   c: number;
@@ -33,17 +34,22 @@ export class CustomEmitterEffect implements AsciiEffect {
   private colors: number[] = [];
   private colorMode: ColorMode = "random";
   private glowRadius = 14;
+  private seed = 1;
+  private rng: () => number = mulberry32(1);
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
     const newSpawnX = (params.spawnX as number) ?? 0.5;
     const newSpawnY = (params.spawnY as number) ?? 1.0;
+    const newSeed = readSeed(params);
     const needsRegen = this.grid.cols === 0
+      || newSeed !== this.seed
       || grid.cols !== this.grid.cols
       || grid.rows !== this.grid.rows
       || newSpawnX !== this.spawnX
       || newSpawnY !== this.spawnY;
 
     this.grid = grid;
+    this.seed = newSeed;
     const str = (params.chars as string) ?? "*+.";
     this.codes = [...str].map((c) => c.codePointAt(0)!);
     this.spawnRate = (params.spawnRate as number) ?? 10;
@@ -58,11 +64,18 @@ export class CustomEmitterEffect implements AsciiEffect {
     this.colorMode = readColorMode(params);
     this.glowRadius = (params.glowRadius as number) ?? 14;
 
-    if (needsRegen) {
-      this.particles = [];
-      this.spawnAccum = 0;
-      this.spawnCounter = 0;
-    }
+    if (needsRegen) this.regen();
+  }
+
+  private regen(): void {
+    this.rng = mulberry32(this.seed);
+    this.particles = [];
+    this.spawnAccum = 0;
+    this.spawnCounter = 0;
+  }
+
+  reset(): void {
+    this.regen();
   }
 
   update(dt: number, _time: number, _mask: MaskGrid, out: CellBuffer): void {
@@ -73,10 +86,10 @@ export class CustomEmitterEffect implements AsciiEffect {
     const count = Math.floor(this.spawnAccum);
     this.spawnAccum -= count;
     for (let i = 0; i < count; i++) {
-      const angle = ((this.direction + (Math.random() - 0.5) * this.spread) * Math.PI) / 180;
-      const spd = this.speed * (0.7 + Math.random() * 0.6);
+      const angle = ((this.direction + (this.rng() - 0.5) * this.spread) * Math.PI) / 180;
+      const spd = this.speed * (0.7 + this.rng() * 0.6);
       const idx = this.colorMode === "random"
-        ? Math.floor(Math.random() * this.colors.length)
+        ? Math.floor(this.rng() * this.colors.length)
         : this.spawnCounter;
       this.particles.push({
         c: this.spawnX * cols,
@@ -84,8 +97,8 @@ export class CustomEmitterEffect implements AsciiEffect {
         vc: Math.cos(angle) * spd,
         vr: Math.sin(angle) * spd,
         life: 0,
-        maxLife: this.lifetime * (0.5 + Math.random()),
-        charIdx: Math.floor(Math.random() * this.codes.length),
+        maxLife: this.lifetime * (0.5 + this.rng()),
+        charIdx: Math.floor(this.rng() * this.codes.length),
         color: pickColorPacked(this.colors, this.colorMode === "gradient" ? "random" : this.colorMode, idx),
         colorIdx: idx,
       });

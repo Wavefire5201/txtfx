@@ -1,18 +1,16 @@
 import type { AsciiEffect, GridInfo, MaskGrid, ControlDescriptor } from "./types";
 import { type ColorMode, pickColorPacked, readColorsPacked, readColorMode, colorControls } from "./color-util";
 import { type CellBuffer } from "../cell-buffer";
+import { mulberry32, readSeed } from "../prng";
 
 const DECODE_CHARS = "@#W$9876543210?!abc;:+=-,._";
 const DECODE_CODES: number[] = [...DECODE_CHARS].map((c) => c.codePointAt(0)!);
-
-function randomDecodeCode(): number {
-  return DECODE_CODES[Math.floor(Math.random() * DECODE_CODES.length)];
-}
 
 export class DecodeEffect implements AsciiEffect {
   type = "decode";
   private grid: GridInfo = { cols: 0, rows: 0, charW: 0, charH: 0, fontSize: 0 };
   private baseChars: string[][] = [];
+  private baseText = "";
   private delays: number[][] = [];
   private cellColorIdx: number[][] = [];
   private duration = 2.4;
@@ -20,27 +18,37 @@ export class DecodeEffect implements AsciiEffect {
   private diagonalBias = 0.7;
   private colors: number[] = [];
   private colorMode: ColorMode = "random";
+  private seed = 1;
+  private rng: () => number = mulberry32(1);
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
     const newDuration = (params.duration as number) ?? 2.4;
     const newDiagonalBias = (params.diagonalBias as number) ?? 0.7;
+    const newSeed = readSeed(params);
     const needsRebuild = this.delays.length === 0
+      || newSeed !== this.seed
       || grid.cols !== this.grid.cols
       || grid.rows !== this.grid.rows
       || newDuration !== this.duration
       || newDiagonalBias !== this.diagonalBias;
 
     this.grid = grid;
+    this.seed = newSeed;
     this.duration = newDuration;
     this.settleTime = (params.settleTime as number) ?? 0.4;
     this.diagonalBias = newDiagonalBias;
     this.colors = readColorsPacked(params, "#00ff41");
     this.colorMode = readColorMode(params);
 
-    if (needsRebuild) this.buildDelays();
+    if (needsRebuild) this.regen();
   }
 
-  private buildDelays(): void {
+  private randomDecodeCode(): number {
+    return DECODE_CODES[Math.floor(this.rng() * DECODE_CODES.length)];
+  }
+
+  private regen(): void {
+    this.rng = mulberry32(this.seed);
     const { cols, rows } = this.grid;
     this.delays = [];
     this.cellColorIdx = [];
@@ -50,10 +58,10 @@ export class DecodeEffect implements AsciiEffect {
       const colorRow: number[] = [];
       for (let c = 0; c < cols; c++) {
         const pos = (c / cols + r / rows) / 2;
-        const delay = (pos * this.diagonalBias + Math.random() * (1 - this.diagonalBias)) * this.duration;
+        const delay = (pos * this.diagonalBias + this.rng() * (1 - this.diagonalBias)) * this.duration;
         row.push(delay);
         colorRow.push(this.colorMode === "random"
-          ? Math.floor(Math.random() * this.colors.length)
+          ? Math.floor(this.rng() * this.colors.length)
           : counter);
         counter++;
       }
@@ -62,7 +70,12 @@ export class DecodeEffect implements AsciiEffect {
     }
   }
 
+  reset(): void {
+    this.regen();
+  }
+
   setBaseText(text: string): void {
+    this.baseText = text;
     this.baseChars = text.split("\n").map((line) => [...line]);
   }
 
@@ -83,14 +96,14 @@ export class DecodeEffect implements AsciiEffect {
 
         if (elapsed < 0) {
           // Not yet revealed — occasional random char
-          if (Math.random() < 0.15) {
-            out.push(r, c, randomDecodeCode(), 0.3, color);
+          if (this.rng() < 0.15) {
+            out.push(r, c, this.randomDecodeCode(), 0.3, color);
           }
         } else if (elapsed < this.settleTime) {
           // Flickering between random and correct
           const progress = elapsed / this.settleTime;
-          const correct = Math.random() < progress * 0.8;
-          const chCode = correct ? row[c].codePointAt(0)! : randomDecodeCode();
+          const correct = this.rng() < progress * 0.8;
+          const chCode = correct ? row[c].codePointAt(0)! : this.randomDecodeCode();
           out.push(r, c, chCode, 0.5 + progress * 0.5, color);
         }
         // After settleTime: correct char locked in (handled by base ASCII layer)

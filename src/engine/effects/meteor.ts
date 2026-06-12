@@ -1,6 +1,7 @@
 import type { AsciiEffect, GridInfo, MaskGrid, ControlDescriptor } from "./types";
 import { type ColorMode, pickColorPacked, readColorsPacked, readColorMode, colorControls } from "./color-util";
 import { type CellBuffer } from "../cell-buffer";
+import { mulberry32, readSeed } from "../prng";
 
 // Character code points
 const CODE_STAR = "*".codePointAt(0)!;
@@ -43,9 +44,13 @@ export class MeteorEffect implements AsciiEffect {
   private colors: number[] = [];
   private colorMode: ColorMode = "random";
   private glowRadius = 14;
+  private seed = 1;
+  private rng: () => number = mulberry32(1);
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
+    const newSeed = readSeed(params);
     const needsRegen = this.grid.cols === 0
+      || newSeed !== this.seed
       || grid.cols !== this.grid.cols
       || grid.rows !== this.grid.rows;
 
@@ -60,13 +65,22 @@ export class MeteorEffect implements AsciiEffect {
     this.glowRadius = (params.glowRadius as number) ?? 14;
     this.dc = Math.cos((this.angle * Math.PI) / 180);
     this.dr = Math.sin((-this.angle * Math.PI) / 180);
+    this.seed = newSeed;
     this.grid = grid;
 
-    if (needsRegen) {
-      this.meteors = [];
-      this.nextSpawn = 1.0;
-      this.spawnCounter = 0;
-    }
+    if (needsRegen) this.regen();
+  }
+
+  private regen(): void {
+    this.rng = mulberry32(this.seed);
+    this.meteors = [];
+    this.nextSpawn = 1.0;
+    this.lastTime = 0;
+    this.spawnCounter = 0;
+  }
+
+  reset(): void {
+    this.regen();
   }
 
   update(dt: number, time: number, _mask: MaskGrid, out: CellBuffer): void {
@@ -74,25 +88,25 @@ export class MeteorEffect implements AsciiEffect {
 
     // Detect loop wrap: if time went backward, reset nextSpawn to new time + interval
     if (time < this.lastTime) {
-      this.nextSpawn = time + this.intervalMin + Math.random() * (this.intervalMax - this.intervalMin);
+      this.nextSpawn = time + this.intervalMin + this.rng() * (this.intervalMax - this.intervalMin);
     }
     this.lastTime = time;
 
     if (time > this.nextSpawn) {
       const idx = this.colorMode === "random"
-        ? Math.floor(Math.random() * this.colors.length)
+        ? Math.floor(this.rng() * this.colors.length)
         : this.spawnCounter;
       this.meteors.push({
-        c: Math.random() * cols * 1.1 - cols * 0.05,
+        c: this.rng() * cols * 1.1 - cols * 0.05,
         r: -2,
         age: 0,
-        maxAge: 2.0 + Math.random() * 1.2,
-        speed: this.speedMin + Math.random() * (this.speedMax - this.speedMin),
+        maxAge: 2.0 + this.rng() * 1.2,
+        speed: this.speedMin + this.rng() * (this.speedMax - this.speedMin),
         trail: [],
         color: pickColorPacked(this.colors, this.colorMode === "gradient" ? "random" : this.colorMode, idx),
       });
       this.spawnCounter++;
-      this.nextSpawn = time + this.intervalMin + Math.random() * (this.intervalMax - this.intervalMin);
+      this.nextSpawn = time + this.intervalMin + this.rng() * (this.intervalMax - this.intervalMin);
     }
 
     for (let i = this.meteors.length - 1; i >= 0; i--) {

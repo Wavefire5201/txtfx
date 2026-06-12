@@ -46,6 +46,12 @@ export interface AsciiEffect {
   init(grid: GridInfo, params: Record<string, unknown>): void;
   /** Writes this frame's cells into `out` (cleared by the caller). */
   update(dt: number, time: number, mask: MaskGrid, out: CellBuffer): void;
+  /**
+   * Returns to the exact t=0 state: re-seeds the PRNG and rebuilds initial
+   * populations. Same seed + same update sequence after reset() => identical
+   * frames (deterministic scrubbing, loops, and exports).
+   */
+  reset(): void;
   getControls(): ControlDescriptor[];
 }
 

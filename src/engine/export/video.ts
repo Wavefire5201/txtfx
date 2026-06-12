@@ -16,6 +16,7 @@ import {
   type ImageLike,
 } from "../canvas-util";
 import { macrotaskYield } from "./scheduling";
+import { withSeed } from "../prng";
 import {
   createExportMetrics,
   finishExportMetrics,
@@ -264,11 +265,12 @@ export async function prepareExportContext(
   }
 
   const activeEffects: ActiveEffect[] = [];
-  for (const cfg of scene.effects) {
+  for (let i = 0; i < scene.effects.length; i++) {
+    const cfg = scene.effects[i];
     if (!cfg.enabled) continue;
     try {
       const instance = createEffect(cfg.type);
-      instance.init(grid, cfg.params || {});
+      instance.init(grid, withSeed(cfg.params || {}, scene.seed, i));
       if ("setBaseText" in instance && typeof (instance as Record<string, unknown>).setBaseText === "function") {
         (instance as unknown as { setBaseText: (t: string) => void }).setBaseText(baseText);
       }

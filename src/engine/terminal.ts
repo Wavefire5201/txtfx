@@ -1,4 +1,5 @@
 import { createEffect } from "./effects";
+import { withSeed } from "./prng";
 import type { GridInfo, MaskGrid } from "./effects/types";
 import type { SceneData } from "./scene";
 import type { ActiveEffect } from "./renderer";
@@ -114,10 +115,11 @@ export function prepareTerminalContext(
     grid,
   );
   const effects = scene.effects
-    .filter((cfg) => cfg.enabled)
-    .map((cfg): ActiveEffect => {
+    .map((cfg, index) => ({ cfg, index }))
+    .filter(({ cfg }) => cfg.enabled)
+    .map(({ cfg, index }): ActiveEffect => {
       const instance = createEffect(cfg.type);
-      instance.init(grid, cfg.params);
+      instance.init(grid, withSeed(cfg.params, scene.seed, index));
       feedBaseText(instance, baseText);
 
       return {

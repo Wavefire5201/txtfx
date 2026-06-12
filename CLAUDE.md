@@ -37,8 +37,23 @@ init(grid: GridInfo, params: Record<string, unknown>): void {
 }
 ```
 
-**Structural params** (trigger regen): count, grid dimensions, spawn position, density
+**Structural params** (trigger regen): count, grid dimensions, spawn position, density, seed
 **Visual params** (hot-update only): colors, glowRadius, speed, intensity, spread
+
+### Determinism contract (seeded effects)
+
+- Effects NEVER call Math.random. Each instance owns a mulberry32 stream
+  (`this.rng`), seeded from the injected `__seed` param (hosts inject it via
+  `withSeed(params, scene.seed, effectIndex)` from `src/engine/prng.ts`).
+- `regen()` re-seeds the rng FIRST, then rebuilds ALL mutable runtime state
+  (particles, accumulators, timers, spawn counters). `reset()` = `regen()`.
+- Contract: same seed + same update() sequence after reset() => identical
+  frames. This powers reproducible exports, scrub-stable previews, identical
+  loop passes, and the snapshot tests below.
+- Behavior is pinned by `src/test/effect-snapshots/` (per-effect seeded cells;
+  regenerate with UPDATE_EFFECT_SNAPSHOTS=1) and `src/test/golden-frames/`
+  (compositeFrame text at fixed times; UPDATE_GOLDEN_FRAMES=1). Regenerate
+  only for INTENTIONAL behavior changes, and eyeball the diff.
 
 ### Rendering architecture
 

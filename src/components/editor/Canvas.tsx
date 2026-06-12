@@ -9,6 +9,7 @@ import { createEffect } from "@/engine/effects";
 import { compositeFrame, collectHoles, holesChanged, punchHoles, type ActiveEffect, type GlowCell } from "@/engine/renderer";
 import { drawEffectCells, type EffectCanvasLayout } from "@/engine/effect-canvas";
 import type { GridInfo, MaskGrid } from "@/engine/effects/types";
+import { withSeed } from "@/engine/prng";
 import { ImageSquare, UploadSimple, ChartLine, Minus, Plus, ArrowCounterClockwise } from "@phosphor-icons/react";
 import { toast } from "./Toast";
 import type { TypewriterEffect } from "@/engine/effects/typewriter";
@@ -30,6 +31,7 @@ export function Canvas() {
   // ASCII visual props (opacity, blendMode, color, etc.) are applied via refs elsewhere
   // to bypass React re-renders during slider drags.
   const sceneEffects = useEditorStore((s) => s.scene.effects);
+  const sceneSeed = useEditorStore((s) => s.scene.seed);
   const asciiRamp = useEditorStore((s) => s.scene.ascii.ramp);
   const playbackDuration = useEditorStore((s) => s.scene.playback.duration);
   const playbackLoop = useEditorStore((s) => s.scene.playback.loop);
@@ -160,7 +162,7 @@ export function Canvas() {
       // Update params — effects handle init() gracefully (only reset on structural changes)
       effectsRef.current = configs.map((cfg, i) => {
         const existing = prev[i];
-        if (grid.cols > 0) existing.instance.init(grid, cfg.params);
+        if (grid.cols > 0) existing.instance.init(grid, withSeed(cfg.params, sceneSeed, i));
         return {
           ...existing,
           maskRegion: cfg.maskRegion,
@@ -173,9 +175,9 @@ export function Canvas() {
       });
     } else {
       // Types changed — recreate all instances
-      effectsRef.current = configs.map((cfg) => {
+      effectsRef.current = configs.map((cfg, i) => {
         const instance = createEffect(cfg.type);
-        if (grid.cols > 0) instance.init(grid, cfg.params);
+        if (grid.cols > 0) instance.init(grid, withSeed(cfg.params, sceneSeed, i));
         return {
           instance,
           maskRegion: cfg.maskRegion,
@@ -190,7 +192,7 @@ export function Canvas() {
     if (asciiTextRef.current) {
       feedBaseText(effectsRef.current, asciiTextRef.current);
     }
-  }, [sceneEffects, grid]);
+  }, [sceneEffects, sceneSeed, grid]);
 
   const computeContainRect = useCallback(() => {
     const container = containerRef.current;
@@ -440,10 +442,14 @@ export function Canvas() {
     // Read CURRENT configs from store, not from stale closure.
     // The animation loop's tick() captures this function from an old render,
     // so sceneEffects might be outdated if the user changed params during playback.
-    const configs = useEditorStore.getState().scene.effects;
-    // Re-init all effects from scratch
+    const state = useEditorStore.getState();
+    const configs = state.scene.effects;
+    // Re-init with current params, then reset to the exact seeded t=0 state —
+    // the subsequent fixed-step replay is fully deterministic, so scrubbing
+    // to the same time always shows the same frame.
     for (let i = 0; i < effectsRef.current.length && i < configs.length; i++) {
-      effectsRef.current[i].instance.init(grid, configs[i].params);
+      effectsRef.current[i].instance.init(grid, withSeed(configs[i].params, state.scene.seed, i));
+      effectsRef.current[i].instance.reset();
     }
     if (asciiTextRef.current) {
       feedBaseText(effectsRef.current, asciiTextRef.current);

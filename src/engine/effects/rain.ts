@@ -1,6 +1,7 @@
 import type { AsciiEffect, GridInfo, MaskGrid, ControlDescriptor } from "./types";
 import { type ColorMode, pickColorPacked, readColorsPacked, readColorMode, colorControls } from "./color-util";
 import { type CellBuffer } from "../cell-buffer";
+import { mulberry32, readSeed } from "../prng";
 
 // Character code points
 const CODE_PIPE = "|".codePointAt(0)!;
@@ -28,9 +29,13 @@ export class RainEffect implements AsciiEffect {
   private colors: number[] = [];
   private colorMode: ColorMode = "random";
   private glowRadius = 10;
+  private seed = 1;
+  private rng: () => number = mulberry32(1);
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
+    const newSeed = readSeed(params);
     const needsRegen = this.grid.cols === 0
+      || newSeed !== this.seed
       || grid.cols !== this.grid.cols
       || grid.rows !== this.grid.rows;
 
@@ -41,13 +46,21 @@ export class RainEffect implements AsciiEffect {
     this.colors = readColorsPacked(params, "#88bbee");
     this.colorMode = readColorMode(params);
     this.glowRadius = (params.glowRadius as number) ?? 10;
+    this.seed = newSeed;
     this.grid = grid;
 
-    if (needsRegen) {
-      this.drops = [];
-      this.spawnAccum = 0;
-      this.spawnCounter = 0;
-    }
+    if (needsRegen) this.regen();
+  }
+
+  private regen(): void {
+    this.rng = mulberry32(this.seed);
+    this.drops = [];
+    this.spawnAccum = 0;
+    this.spawnCounter = 0;
+  }
+
+  reset(): void {
+    this.regen();
   }
 
   update(dt: number, _time: number, _mask: MaskGrid, out: CellBuffer): void {
@@ -59,13 +72,13 @@ export class RainEffect implements AsciiEffect {
     this.spawnAccum -= spawnCount;
     for (let i = 0; i < spawnCount; i++) {
       const idx = this.colorMode === "random"
-        ? Math.floor(Math.random() * this.colors.length)
+        ? Math.floor(this.rng() * this.colors.length)
         : this.spawnCounter;
       this.drops.push({
-        col: Math.floor(Math.random() * cols),
+        col: Math.floor(this.rng() * cols),
         y: -1,
-        speed: this.speedMin + Math.random() * (this.speedMax - this.speedMin),
-        length: 2 + Math.floor(Math.random() * 3),
+        speed: this.speedMin + this.rng() * (this.speedMax - this.speedMin),
+        length: 2 + Math.floor(this.rng() * 3),
         color: pickColorPacked(this.colors, this.colorMode === "gradient" ? "random" : this.colorMode, idx),
       });
       this.spawnCounter++;

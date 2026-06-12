@@ -1,6 +1,7 @@
 import type { AsciiEffect, GridInfo, MaskGrid, ControlDescriptor } from "./types";
 import { type ColorMode, pickColorPacked, readColorsPacked, readColorMode, colorControls } from "./color-util";
 import { type CellBuffer } from "../cell-buffer";
+import { mulberry32, readSeed } from "../prng";
 
 const CHAR_AT = "@".codePointAt(0)!;
 const CHAR_PLUS = "+".codePointAt(0)!;
@@ -38,9 +39,13 @@ export class FireworkEffect implements AsciiEffect {
   private colorMode: ColorMode = "random";
   private glowRadius = 18;
   private spawnCounter = 0;
+  private seed = 1;
+  private rng: () => number = mulberry32(1);
 
   init(grid: GridInfo, params: Record<string, unknown>): void {
+    const newSeed = readSeed(params);
     const needsRegen = this.grid.cols === 0
+      || newSeed !== this.seed
       || grid.cols !== this.grid.cols
       || grid.rows !== this.grid.rows;
 
@@ -52,12 +57,21 @@ export class FireworkEffect implements AsciiEffect {
     this.colorMode = readColorMode(params);
     this.glowRadius = (params.glowRadius as number) ?? 18;
     this.grid = grid;
+    this.seed = newSeed;
 
-    if (needsRegen) {
-      this.bursts = [];
-      this.spawnCounter = 0;
-      this.nextSpawn = this.intervalMin + Math.random() * (this.intervalMax - this.intervalMin);
-    }
+    if (needsRegen) this.regen();
+  }
+
+  private regen(): void {
+    this.rng = mulberry32(this.seed);
+    this.bursts = [];
+    this.spawnCounter = 0;
+    this.lastTime = 0;
+    this.nextSpawn = this.intervalMin + this.rng() * (this.intervalMax - this.intervalMin);
+  }
+
+  reset(): void {
+    this.regen();
   }
 
   update(dt: number, time: number, _mask: MaskGrid, out: CellBuffer): void {
@@ -65,13 +79,13 @@ export class FireworkEffect implements AsciiEffect {
 
     // Detect loop wrap: if time went backward, reset nextSpawn to new time + interval
     if (time < this.lastTime) {
-      this.nextSpawn = time + this.intervalMin + Math.random() * (this.intervalMax - this.intervalMin);
+      this.nextSpawn = time + this.intervalMin + this.rng() * (this.intervalMax - this.intervalMin);
     }
     this.lastTime = time;
 
     if (time > this.nextSpawn) {
       this.spawnBurst(cols, rows);
-      this.nextSpawn = time + this.intervalMin + Math.random() * (this.intervalMax - this.intervalMin);
+      this.nextSpawn = time + this.intervalMin + this.rng() * (this.intervalMax - this.intervalMin);
     }
 
     for (let i = this.bursts.length - 1; i >= 0; i--) {
@@ -112,31 +126,31 @@ export class FireworkEffect implements AsciiEffect {
   }
 
   private spawnBurst(cols: number, rows: number): void {
-    const cx = cols > 16 ? 8 + Math.random() * (cols - 16) : cols / 2;
-    const cy = rows > 12 ? 6 + Math.random() * (rows - 12) : rows / 2;
+    const cx = cols > 16 ? 8 + this.rng() * (cols - 16) : cols / 2;
+    const cy = rows > 12 ? 6 + this.rng() * (rows - 12) : rows / 2;
     const particles: Particle[] = [];
 
     // Pick a burst color (random per burst or per particle)
     const burstIdx = this.colorMode === "random"
-      ? Math.floor(Math.random() * this.colors.length)
+      ? Math.floor(this.rng() * this.colors.length)
       : this.spawnCounter;
     const burstColor = pickColorPacked(this.colors, this.colorMode === "gradient" ? "random" : this.colorMode, burstIdx);
     this.spawnCounter++;
 
     // Main radial particles
     for (let i = 0; i < this.particleCount; i++) {
-      const angle = (Math.PI * 2 * i) / this.particleCount + (Math.random() - 0.5) * 0.3;
-      const dist = 0.4 + Math.random() * 0.6;
+      const angle = (Math.PI * 2 * i) / this.particleCount + (this.rng() - 0.5) * 0.3;
+      const dist = 0.4 + this.rng() * 0.6;
       const speed = this.maxRadius * dist;
       const idx = this.colorMode === "random"
-        ? Math.floor(Math.random() * this.colors.length)
+        ? Math.floor(this.rng() * this.colors.length)
         : this.spawnCounter + i;
       particles.push({
         c: cx, r: cy,
         vc: Math.cos(angle) * speed,
         vr: Math.sin(angle) * speed * 0.45, // vertical squash
         life: 0,
-        maxLife: 0.7 + Math.random() * 1,
+        maxLife: 0.7 + this.rng() * 1,
         char: CHAR_AT,
         type: "main",
         color: pickColorPacked(this.colors, this.colorMode === "gradient" ? "random" : this.colorMode, idx),
@@ -145,14 +159,14 @@ export class FireworkEffect implements AsciiEffect {
 
     // Core flash
     for (let i = 0; i < 16; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const speed = 2 + Math.random() * 4;
+      const angle = this.rng() * Math.PI * 2;
+      const speed = 2 + this.rng() * 4;
       particles.push({
         c: cx, r: cy,
         vc: Math.cos(angle) * speed,
         vr: Math.sin(angle) * speed * 0.45,
         life: 0,
-        maxLife: 0.2 + Math.random() * 0.3,
+        maxLife: 0.2 + this.rng() * 0.3,
         char: CHAR_STAR,
         type: "flash",
         color: burstColor,
@@ -161,15 +175,15 @@ export class FireworkEffect implements AsciiEffect {
 
     // Falling sparks
     for (let i = 0; i < 20; i++) {
-      const angle = Math.random() * Math.PI * 2;
-      const dist = 4 + Math.random() * this.maxRadius * 0.7;
+      const angle = this.rng() * Math.PI * 2;
+      const dist = 4 + this.rng() * this.maxRadius * 0.7;
       particles.push({
         c: cx + Math.cos(angle) * dist,
         r: cy + Math.sin(angle) * dist * 0.45,
-        vc: (Math.random() - 0.5) * 3,
-        vr: 1 + Math.random() * 3,
+        vc: (this.rng() - 0.5) * 3,
+        vr: 1 + this.rng() * 3,
         life: 0,
-        maxLife: 0.8 + Math.random() * 1.2,
+        maxLife: 0.8 + this.rng() * 1.2,
         char: CHAR_DOT,
         type: "spark",
         color: burstColor,
