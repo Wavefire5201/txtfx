@@ -57,3 +57,4 @@ package-lock.json
 # test artifacts
 src/test/goldens/*.actual.png
 .playwright-mcp/
+.vitest-attachments/
