@@ -47,7 +47,6 @@ import {
   Trash,
   Plus,
   Sparkle,
-  Drop,
   Flame,
   Snowflake,
   Lightning,
@@ -289,7 +288,8 @@ export function PropertiesPanel() {
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
-  const [presetVersion, setPresetVersion] = useState(0);
+  // Bumped after preset save/delete to re-read presets from localStorage on next render.
+  const [, setPresetVersion] = useState(0);
   const [clearOpen, setClearOpen] = useState(false);
   const [deletePresetTarget, setDeletePresetTarget] = useState<{ type: string; name: string } | null>(null);
   const [presetInput, setPresetInput] = useState<{ effectType: string; effectId: string; params: Record<string, unknown> } | null>(null);

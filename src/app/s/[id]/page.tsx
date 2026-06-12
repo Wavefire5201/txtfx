@@ -1,11 +1,11 @@
-import { db } from "@/db";
+import { getDb } from "@/db";
 import { scenes } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 
 export default async function SharePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const result = await db.select().from(scenes).where(eq(scenes.id, id)).limit(1);
+  const result = await getDb().select().from(scenes).where(eq(scenes.id, id)).limit(1);
 
   if (result.length === 0) {
     return (

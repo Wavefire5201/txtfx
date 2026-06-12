@@ -4,6 +4,13 @@
 
 - Package manager: **bun** (never use npm)
 
+## Testing
+
+- Run tests with `bun run test` (unit, node) and `bun run test:browser` (golden/pixel tests in real Chromium via vitest browser mode). `bun run test:all` runs both.
+- **Never use bare `bun test`** — it invokes bun's own test runner, which lacks vitest APIs and cannot run browser tests.
+- Golden PNGs live in `src/test/goldens/`. A failing golden writes `<name>.actual.png` beside it for comparison. If a visual change is intentional, regenerate with `UPDATE_GOLDENS=1 bun run test:browser` and eyeball the diff before committing.
+- Effects are Math.random-driven (until the seeded-effects refactor lands): reproducible tests must wrap effect init/update with `seedMathRandom()` from `src/test/fixtures.ts`.
+
 ## Effect Engine Conventions
 
 ### init() must preserve particle state

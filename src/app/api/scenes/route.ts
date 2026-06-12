@@ -1,4 +1,4 @@
-import { db } from "@/db";
+import { getDb } from "@/db";
 import { scenes } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
@@ -83,6 +83,7 @@ export async function POST(request: Request) {
 
     // Dedup: compute hash of normalized scene + image hash, check for existing record
     const contentHash = computeContentHash(normalizedJson, imageHash);
+    const db = getDb();
     const existing = await db
       .select({ id: scenes.id })
       .from(scenes)

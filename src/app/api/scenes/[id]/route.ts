@@ -1,4 +1,4 @@
-import { db } from "@/db";
+import { getDb } from "@/db";
 import { scenes } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
@@ -24,7 +24,7 @@ export async function GET(
     if (!/^[a-z0-9]{8}$/.test(id)) {
       return NextResponse.json({ error: "Invalid scene id" }, { status: 400 });
     }
-    const result = await db.select().from(scenes).where(eq(scenes.id, id)).limit(1);
+    const result = await getDb().select().from(scenes).where(eq(scenes.id, id)).limit(1);
 
     if (result.length === 0) {
       return NextResponse.json({ error: "Scene not found" }, { status: 404 });

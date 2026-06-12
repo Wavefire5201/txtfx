@@ -5,6 +5,7 @@ import { type SceneData, type EffectConfig, createDefaultScene } from "@/engine/
 import type { EffectType, MaskRegion } from "@/engine/effects/types";
 import { Mask } from "@/engine/mask";
 import { saveState } from "@/lib/cache";
+import { clearGlowCache } from "@/engine/glow-cache";
 
 type Tool = "select" | "brush-fg" | "brush-bg" | "pan";
 
@@ -135,13 +136,22 @@ export const useEditorStore = create<EditorState>((set) => ({
     const migrated = {
       ...scene,
       effects: scene.effects.map((fx) => {
-        const tl = fx.timeline as any;
+        // Legacy scenes stored timeline.loop instead of timeline.mode
+        const tl = fx.timeline as {
+          start: number;
+          end: number | null;
+          mode?: "continuous" | "one-shot";
+          loop?: boolean;
+        };
         if (tl.mode === undefined && tl.loop !== undefined) {
           return { ...fx, timeline: { start: tl.start, end: tl.end, mode: tl.loop ? "continuous" as const : "one-shot" as const } };
         }
         return fx;
       }),
     };
+    // Loading a different scene almost always means a different palette — drop
+    // sprites cached from the previous scene rather than letting them age out via FIFO.
+    clearGlowCache();
     set({ scene: migrated });
   },
   updateAscii: (updates) =>
@@ -175,11 +185,13 @@ export const useEditorStore = create<EditorState>((set) => ({
     set((s) => ({
       scene: { ...s.scene, effects: s.scene.effects.filter((e) => e.id !== id) },
     })),
-  clearEffects: () =>
+  clearEffects: () => {
+    clearGlowCache();
     set((s) => ({
       scene: { ...s.scene, effects: [] },
       expandedEffects: new Set<string>(),
-    })),
+    }));
+  },
   toggleEffect: (id) =>
     set((s) => ({
       scene: {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useSyncExternalStore } from "react";
 import * as Slider from "@radix-ui/react-slider";
 import { useEditorStore } from "@/lib/store";
 import {
@@ -20,12 +20,13 @@ import {
 } from "@phosphor-icons/react";
 import { ConfirmDialog } from "./ConfirmDialog";
 
+const noopSubscribe = () => () => {};
+const isMacSnapshot = () => /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent);
+
 export function ToolPanel() {
   const [clearMaskOpen, setClearMaskOpen] = useState(false);
-  const [isMac, setIsMac] = useState(false);
-  useEffect(() => {
-    setIsMac(typeof navigator !== "undefined" && /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent));
-  }, []);
+  // Client-only constant; server snapshot is false so hydration stays consistent.
+  const isMac = useSyncExternalStore(noopSubscribe, isMacSnapshot, () => false);
   const ModKey = isMac ? <Command size={10} weight="bold" /> : <Control size={10} weight="bold" />;
   const ShiftKey = <ArrowFatUp size={10} weight="bold" />;
   const activeTool = useEditorStore((s) => s.activeTool);

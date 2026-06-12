@@ -53,3 +53,7 @@ src/engine/export/player-bundle.ts
 .playwright-mcp/
 .source/
 package-lock.json
+
+# test artifacts
+src/test/goldens/*.actual.png
+.playwright-mcp/

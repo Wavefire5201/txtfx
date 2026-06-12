@@ -1,5 +1,4 @@
-import { db } from "@/db";
-import { rateLimits } from "@/db/schema";
+import { getDb } from "@/db";
 import { sql } from "drizzle-orm";
 
 /**
@@ -24,7 +23,7 @@ export async function checkRateLimit(
   limit: number,
   windowSeconds: number,
 ): Promise<{ allowed: boolean; count: number; retryAfterSec: number }> {
-  const result = await db.execute(sql`
+  const result = await getDb().execute(sql`
     INSERT INTO rate_limits (bucket, key, count, window_start)
     VALUES (${bucket}, ${key}, 1, NOW())
     ON CONFLICT (bucket, key) DO UPDATE SET

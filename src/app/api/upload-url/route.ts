@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getUploadUrl, publicUrl, BUCKET } from "@/lib/r2";
-import { db } from "@/db";
+import { getDb } from "@/db";
 import { scenes } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { checkRateLimit, getClientIp, LIMITS } from "@/lib/rate-limit";
@@ -70,7 +70,7 @@ export async function POST(request: Request) {
 
     // Dedup via DB lookup (free, indexed) instead of R2 HeadObject (Class B op).
     // If any existing scene references this image hash, the R2 object must exist.
-    const existingRows = await db
+    const existingRows = await getDb()
       .select({ imageUrl: scenes.imageUrl })
       .from(scenes)
       .where(eq(scenes.imageHash, hash))
