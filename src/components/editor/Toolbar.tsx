@@ -5,8 +5,16 @@ import Link from "next/link";
 import { useEditorStore } from "@/lib/store";
 import { exportStandaloneHTML } from "@/engine/export/html";
 import { exportEmbedSnippet } from "@/engine/export/embed";
-import { exportGif } from "@/engine/export/gif";
-import { exportWebM } from "@/engine/export/video";
+import { exportGifAuto, exportStillAuto, exportWebMAuto } from "@/engine/export/client";
+import {
+  resolveGifPreset,
+  resolveStillPreset,
+  resolveVideoPreset,
+  type GifPresetId,
+  type StillPresetId,
+  type VideoPresetId,
+} from "@/engine/export/presets";
+import { formatBytes, type ExportMetrics } from "@/engine/export/diagnostics";
 import { type SceneData, createDefaultScene } from "@/engine/scene";
 import { Mask } from "@/engine/mask";
 import { clearState } from "@/lib/cache";
@@ -30,6 +38,13 @@ import {
   FilmStrip,
   VideoCamera,
 } from "@phosphor-icons/react";
+
+function logExportMetrics(m: ExportMetrics) {
+  console.info(
+    `[txtfx export] ${m.format} ${m.width}x${m.height} · ${m.frameCount} frames in ` +
+      `${Math.round(m.elapsedMs ?? 0)}ms (${(m.msPerFrame ?? 0).toFixed(1)}ms/frame) · ${formatBytes(m.bytes)}`,
+  );
+}
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -57,8 +72,7 @@ export function Toolbar() {
   const [resetOpen, setResetOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
-  const [gifResolutionOpen, setGifResolutionOpen] = useState(false);
-  const [videoResolutionOpen, setVideoResolutionOpen] = useState(false);
+  const exportAbortRef = useRef<AbortController | null>(null);
   const [sharing, setSharing] = useState(false);
   const [lightMode, setLightMode] = useState(false);
   const [modKey, setModKey] = useState("Ctrl");
@@ -167,77 +181,143 @@ export function Toolbar() {
     setExporting(false);
   }
 
-  async function handleExportGif(targetHeight: number) {
+  function cancelExport() {
+    exportAbortRef.current?.abort();
+  }
+
+  function isAbortError(err: unknown): boolean {
+    return err instanceof DOMException && err.name === "AbortError";
+  }
+
+  async function loadExportImage(): Promise<HTMLImageElement> {
     if (!imageUrl) {
       toast("Add an image first", "warning");
-      return;
+      throw new Error("Missing image");
     }
-    setGifResolutionOpen(false);
+    const img = new Image();
+    img.src = imageUrl;
+    await new Promise<void>((resolve, reject) => {
+      img.onload = () => resolve();
+      img.onerror = reject;
+    });
+    return img;
+  }
+
+  function targetSize(img: HTMLImageElement, targetHeight: number) {
+    const aspectRatio = img.naturalWidth / img.naturalHeight;
+    const height = targetHeight;
+    const width = Math.round(height * aspectRatio);
+    return { width, height };
+  }
+
+  function beginExport() {
     setExportOpen(false);
     setExporting(true);
     setExportProgress(0);
+    const controller = new AbortController();
+    exportAbortRef.current = controller;
+    return controller;
+  }
+
+  function endExport() {
+    exportAbortRef.current = null;
+    setExporting(false);
+    setExportProgress(0);
+  }
+
+  async function handleExportStill(presetId: StillPresetId) {
+    const preset = resolveStillPreset(presetId);
+    const controller = beginExport();
     await new Promise((r) => setTimeout(r, 0));
     try {
-      const img = new Image();
-      img.src = imageUrl;
-      await new Promise<void>((resolve, reject) => {
-        img.onload = () => resolve();
-        img.onerror = reject;
-      });
-      const aspectRatio = img.naturalWidth / img.naturalHeight;
-      const gifHeight = targetHeight;
-      const gifWidth = Math.round(gifHeight * aspectRatio);
+      const img = await loadExportImage();
+      const { width, height } = targetSize(img, preset.targetHeight);
       const currentMask = useEditorStore.getState().mask;
-      const blob = await exportGif(getExportScene(), img, currentMask, {
-        width: gifWidth,
-        height: gifHeight,
-        onProgress: (pct) => setExportProgress(Math.round(pct * 100)),
+      const blob = await exportStillAuto(getExportScene(), img, currentMask, {
+        width,
+        height,
+        type: preset.type,
+        quality: preset.quality,
+        transparent: preset.transparent,
+        signal: controller.signal,
       });
-      downloadBlob(blob, `txtfx-${new Date().toISOString().slice(0, 10)}.gif`);
-      toast("GIF exported");
+      downloadBlob(blob, `txtfx-${new Date().toISOString().slice(0, 10)}.png`);
+      toast(`${preset.label} exported (${formatBytes(blob.size)})`);
     } catch (err) {
-      console.error("GIF export failed:", err);
-      toast("GIF export failed", "warning");
+      if (isAbortError(err)) {
+        toast("Export cancelled");
+      } else if ((err as Error).message !== "Missing image") {
+        console.error("Still export failed:", err);
+        toast("Still export failed", "warning");
+      }
     } finally {
-      setExporting(false);
-      setExportProgress(0);
+      endExport();
     }
   }
 
-  async function handleExportWebM(targetHeight: number) {
-    if (!imageUrl) {
-      toast("Add an image first", "warning");
-      return;
-    }
-    setVideoResolutionOpen(false);
-    setExportOpen(false);
-    setExporting(true);
-    setExportProgress(0);
+  async function handleExportGif(presetId: GifPresetId) {
+    const preset = resolveGifPreset(presetId);
+    const controller = beginExport();
     await new Promise((r) => setTimeout(r, 0));
     try {
-      const img = new Image();
-      img.src = imageUrl;
-      await new Promise<void>((resolve, reject) => {
-        img.onload = () => resolve();
-        img.onerror = reject;
-      });
-      const aspectRatio = img.naturalWidth / img.naturalHeight;
-      const h = targetHeight;
-      const w = Math.round(h * aspectRatio);
+      const img = await loadExportImage();
+      const { width, height } = targetSize(img, preset.targetHeight);
       const currentMask = useEditorStore.getState().mask;
-      const { blob, ext } = await exportWebM(getExportScene(), img, currentMask, {
-        width: w,
-        height: h,
+      const blob = await exportGifAuto(getExportScene(), img, currentMask, {
+        width,
+        height,
+        fps: preset.fps,
+        maxColors: preset.maxColors,
+        maxDuration: preset.maxDuration,
+        paletteMode: preset.paletteMode,
+        colorFormat: preset.colorFormat,
+        prequantize: preset.prequantize,
+        signal: controller.signal,
         onProgress: (pct) => setExportProgress(Math.round(pct * 100)),
+        onMetrics: logExportMetrics,
+      });
+      downloadBlob(blob, `txtfx-${new Date().toISOString().slice(0, 10)}.gif`);
+      toast(`${preset.label} exported (${formatBytes(blob.size)})`);
+    } catch (err) {
+      if (isAbortError(err)) {
+        toast("Export cancelled");
+      } else if ((err as Error).message !== "Missing image") {
+        console.error("GIF export failed:", err);
+        toast("GIF export failed", "warning");
+      }
+    } finally {
+      endExport();
+    }
+  }
+
+  async function handleExportWebM(presetId: VideoPresetId) {
+    const preset = resolveVideoPreset(presetId);
+    const controller = beginExport();
+    await new Promise((r) => setTimeout(r, 0));
+    try {
+      const img = await loadExportImage();
+      const { width, height } = targetSize(img, preset.targetHeight);
+      const currentMask = useEditorStore.getState().mask;
+      const { blob, ext } = await exportWebMAuto(getExportScene(), img, currentMask, {
+        width,
+        height,
+        fps: preset.fps,
+        videoBitsPerSecond: preset.videoBitsPerSecond,
+        signal: controller.signal,
+        onProgress: (pct) => setExportProgress(Math.round(pct * 100)),
+        onMetrics: logExportMetrics,
       });
       downloadBlob(blob, `txtfx-${new Date().toISOString().slice(0, 10)}.${ext}`);
-      toast("Video exported");
+      toast(`${preset.label} exported (${formatBytes(blob.size)})`);
     } catch (err) {
-      console.error("WebM export failed:", err);
-      toast("Video export failed", "warning");
+      if (isAbortError(err)) {
+        toast("Export cancelled");
+      } else if ((err as Error).message !== "Missing image") {
+        console.error("WebM export failed:", err);
+        toast("Video export failed", "warning");
+      }
     } finally {
-      setExporting(false);
-      setExportProgress(0);
+      endExport();
     }
   }
 
@@ -337,12 +417,11 @@ export function Toolbar() {
       <div className="toolbar-dropdown-wrap">
         <button
           className="toolbar-item"
-          onClick={() => setExportOpen(!exportOpen)}
-          disabled={exporting}
+          onClick={exporting ? cancelExport : () => setExportOpen(!exportOpen)}
         >
           <Export size={14} style={{ marginRight: 4 }} />
-          {exporting ? `Exporting${exportProgress > 0 ? ` ${exportProgress}%` : ""}...` : "Export"}
-          <CaretDown size={10} style={{ marginLeft: 4, opacity: 0.5 }} />
+          {exporting ? `Cancel export${exportProgress > 0 ? ` ${exportProgress}%` : ""}` : "Export"}
+          {!exporting && <CaretDown size={10} style={{ marginLeft: 4, opacity: 0.5 }} />}
         </button>
 
         {exportOpen && (
@@ -357,18 +436,39 @@ export function Toolbar() {
                 <FileHtml size={14} />
                 <span>Standalone HTML</span>
               </button>
-              <button className="toolbar-dropdown-item" disabled title="Coming soon">
+              <button className="toolbar-dropdown-item" onClick={handleExportEmbed}>
                 <Code size={14} />
                 <span>Copy embed snippet</span>
               </button>
               <div className="toolbar-dropdown-divider" />
-              <button className="toolbar-dropdown-item" disabled title="Coming soon">
-                <FilmStrip size={14} />
-                <span>Export GIF</span>
+              <button className="toolbar-dropdown-item" onClick={() => handleExportStill("standard")}>
+                <FileArrowDown size={14} />
+                <span>PNG Still (1080p)</span>
               </button>
-              <button className="toolbar-dropdown-item" disabled title="Coming soon">
+              <button className="toolbar-dropdown-item" onClick={() => handleExportStill("transparent")}>
+                <FileArrowDown size={14} />
+                <span>Transparent overlay</span>
+              </button>
+              <div className="toolbar-dropdown-divider" />
+              <button className="toolbar-dropdown-item" onClick={() => handleExportGif("preview")}>
+                <FilmStrip size={14} />
+                <span>GIF Preview (small)</span>
+              </button>
+              <button className="toolbar-dropdown-item" onClick={() => handleExportGif("balanced")}>
+                <FilmStrip size={14} />
+                <span>GIF Balanced</span>
+              </button>
+              <button className="toolbar-dropdown-item" onClick={() => handleExportGif("quality")}>
+                <FilmStrip size={14} />
+                <span>GIF Quality</span>
+              </button>
+              <button className="toolbar-dropdown-item" onClick={() => handleExportWebM("balanced")}>
                 <VideoCamera size={14} />
-                <span>Export WebM</span>
+                <span>WebM Balanced</span>
+              </button>
+              <button className="toolbar-dropdown-item" onClick={() => handleExportWebM("high")}>
+                <VideoCamera size={14} />
+                <span>WebM High Quality</span>
               </button>
             </div>
           </>

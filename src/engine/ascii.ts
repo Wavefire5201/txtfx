@@ -1,4 +1,5 @@
 import type { GridInfo } from "./effects/types";
+import { createAnyCanvas, get2d, getImageSize, normalizeToCanvasSource, type ImageLike } from "./canvas-util";
 
 const DEFAULT_RAMP = " .`,:;cbaO0%#@";
 
@@ -69,7 +70,7 @@ export function measureGrid(container: HTMLElement): GridInfo {
  * Uses cover-crop logic to fill the grid without distortion.
  */
 export function imageToAscii(
-  img: HTMLImageElement | HTMLCanvasElement,
+  img: ImageLike,
   grid: GridInfo,
   config: AsciiConfig = {}
 ): string {
@@ -79,14 +80,14 @@ export function imageToAscii(
   const ramp = config.ramp ?? DEFAULT_RAMP;
   const gamma = config.gamma ?? 1.0;
 
-  const canvas = document.createElement("canvas");
-  canvas.width = cols;
-  canvas.height = rows;
-  const ctx = canvas.getContext("2d")!;
+  const ctx = get2d(createAnyCanvas(cols, rows));
+
+  // Canvas-source draws resample deterministically (image-element sources
+  // don't, across realms) — critical for export reproducibility.
+  const source = normalizeToCanvasSource(img);
 
   // Cover-crop: fill cols×rows without distortion
-  const imgW = img instanceof HTMLCanvasElement ? img.width : img.naturalWidth;
-  const imgH = img instanceof HTMLCanvasElement ? img.height : img.naturalHeight;
+  const { width: imgW, height: imgH } = getImageSize(source);
   const imgAspect = imgW / imgH;
   const cellAspect = cols / rows;
   let sx = 0, sy = 0, sw = imgW, sh = imgH;
