@@ -21,7 +21,13 @@ import {
   finishExportMetrics,
   formatBytes,
 } from "./diagnostics";
-import { resolveGifPreset, resolveVideoPreset } from "./presets";
+import {
+  resolveGifPreset,
+  resolveVideoPreset,
+  computeVideoDimensions,
+  videoBitrateFor,
+  VIDEO_MAX_WIDTH,
+} from "./presets";
 import { renderAnsiFrame, renderPlainTextFrame, renderTerminalAnsiFrame, renderTerminalTextFrame, stripAnsi } from "./text";
 
 class StubEffect implements AsciiEffect {
@@ -126,6 +132,34 @@ describe("export quality helpers", () => {
     expect(finished.elapsedMs).toBe(250);
     expect(finished.bytes).toBe(2048);
     expect(formatBytes(finished.bytes)).toBe("2 KB");
+  });
+
+  it("computes encoder-safe custom video dimensions", () => {
+    // 16:9 at 1080p
+    expect(computeVideoDimensions(1920, 1080, 1080)).toEqual({ width: 1920, height: 1080 });
+    // Odd-width aspect gets rounded to even (1080 * 4/3 = 1440 even; 717p -> even)
+    expect(computeVideoDimensions(4, 3, 717).height % 2).toBe(0);
+    expect(computeVideoDimensions(4, 3, 717).width % 2).toBe(0);
+    // Clamped below and above
+    expect(computeVideoDimensions(1920, 1080, 10).height).toBe(240);
+    expect(computeVideoDimensions(1920, 1080, 99999).height).toBe(2160);
+    // Ultra-wide images cap at max width and reduce height to preserve aspect
+    const wide = computeVideoDimensions(10000, 1000, 1000);
+    expect(wide.width).toBeLessThanOrEqual(VIDEO_MAX_WIDTH);
+    expect(wide.width / wide.height).toBeCloseTo(10, 0);
+    // Degenerate image falls back to 16:9
+    expect(computeVideoDimensions(0, 0, 720)).toEqual({ width: 1280, height: 720 });
+  });
+
+  it("scales video bitrate with pixel throughput, clamped to sane bounds", () => {
+    // Matches existing preset fidelity within tolerance
+    expect(videoBitrateFor(1280, 720, 24)).toBeGreaterThan(2_000_000);
+    expect(videoBitrateFor(1280, 720, 24)).toBeLessThan(4_000_000);
+    expect(videoBitrateFor(1920, 1080, 30)).toBeGreaterThan(6_000_000);
+    expect(videoBitrateFor(1920, 1080, 30)).toBeLessThan(9_000_000);
+    // Bounds
+    expect(videoBitrateFor(320, 240, 24)).toBe(1_000_000);
+    expect(videoBitrateFor(3840, 2160, 60)).toBe(20_000_000);
   });
 
   it("keeps GIF presets smaller than video presets by default", () => {

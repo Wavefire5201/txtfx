@@ -119,3 +119,43 @@ export function resolveVideoPreset(id: VideoPresetId): VideoExportPreset {
 export function resolveStillPreset(id: StillPresetId): StillExportPreset {
   return STILL_EXPORT_PRESETS[id];
 }
+
+// ---------------------------------------------------------------------------
+// Custom video resolution support
+// ---------------------------------------------------------------------------
+
+export const VIDEO_MIN_HEIGHT = 240;
+export const VIDEO_MAX_HEIGHT = 2160;
+export const VIDEO_MAX_WIDTH = 4096;
+export const VIDEO_HEIGHT_CHOICES = [720, 1080, 1440, 2160] as const;
+export const VIDEO_FPS_CHOICES = [24, 30, 60] as const;
+
+/**
+ * Output size for a target height, preserving the image aspect, clamped to
+ * encoder-safe bounds and rounded to EVEN dimensions (VP9/H.264 requirement).
+ */
+export function computeVideoDimensions(
+  imageWidth: number,
+  imageHeight: number,
+  targetHeight: number,
+): { width: number; height: number } {
+  const aspect = imageWidth > 0 && imageHeight > 0 ? imageWidth / imageHeight : 16 / 9;
+  let height = Math.round(Math.min(VIDEO_MAX_HEIGHT, Math.max(VIDEO_MIN_HEIGHT, targetHeight)));
+  let width = Math.round(height * aspect);
+  if (width > VIDEO_MAX_WIDTH) {
+    width = VIDEO_MAX_WIDTH;
+    height = Math.round(width / aspect);
+  }
+  width &= ~1;
+  height &= ~1;
+  return { width, height };
+}
+
+/**
+ * Bitrate scaled to pixel throughput (~0.12 bits/pixel/frame — matches the
+ * fidelity of the existing presets: 720p24 ≈ 2.7Mbps, 1080p30 ≈ 7.5Mbps).
+ */
+export function videoBitrateFor(width: number, height: number, fps: number): number {
+  const bits = width * height * fps * 0.12;
+  return Math.round(Math.min(20_000_000, Math.max(1_000_000, bits)));
+}

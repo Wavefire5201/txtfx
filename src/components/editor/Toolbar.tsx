@@ -10,6 +10,7 @@ import {
   resolveGifPreset,
   resolveStillPreset,
   resolveVideoPreset,
+  computeVideoDimensions,
   type GifPresetId,
   type StillPresetId,
   type VideoPresetId,
@@ -21,6 +22,7 @@ import { clearState } from "@/lib/cache";
 import { uploadImageToR2 } from "@/lib/image-upload";
 import { toast } from "./Toast";
 import { ConfirmDialog } from "./ConfirmDialog";
+import { ExportVideoDialog } from "./ExportVideoDialog";
 import {
   FolderOpen,
   Export,
@@ -70,6 +72,8 @@ export function Toolbar() {
   const canRedo = useEditorStore((s) => s.canRedo);
   const [exportOpen, setExportOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
+  // Set when the custom WebM dialog is open (holds image natural size for aspect)
+  const [videoDialog, setVideoDialog] = useState<{ w: number; h: number } | null>(null);
   const [exporting, setExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
   const exportAbortRef = useRef<AbortController | null>(null);
@@ -290,25 +294,36 @@ export function Toolbar() {
     }
   }
 
-  async function handleExportWebM(presetId: VideoPresetId) {
-    const preset = resolveVideoPreset(presetId);
+  interface WebMRunOptions {
+    fps: number;
+    videoBitsPerSecond: number;
+    /** Explicit dimensions (custom dialog) — otherwise derived from targetHeight. */
+    width?: number;
+    height?: number;
+    targetHeight?: number;
+  }
+
+  async function runWebMExport(label: string, opts: WebMRunOptions) {
     const controller = beginExport();
     await new Promise((r) => setTimeout(r, 0));
     try {
       const img = await loadExportImage();
-      const { width, height } = targetSize(img, preset.targetHeight);
+      const { width, height } =
+        opts.width && opts.height
+          ? { width: opts.width, height: opts.height }
+          : computeVideoDimensions(img.naturalWidth, img.naturalHeight, opts.targetHeight ?? 720);
       const currentMask = useEditorStore.getState().mask;
       const { blob, ext } = await exportWebMAuto(getExportScene(), img, currentMask, {
         width,
         height,
-        fps: preset.fps,
-        videoBitsPerSecond: preset.videoBitsPerSecond,
+        fps: opts.fps,
+        videoBitsPerSecond: opts.videoBitsPerSecond,
         signal: controller.signal,
         onProgress: (pct) => setExportProgress(Math.round(pct * 100)),
         onMetrics: logExportMetrics,
       });
       downloadBlob(blob, `txtfx-${new Date().toISOString().slice(0, 10)}.${ext}`);
-      toast(`${preset.label} exported (${formatBytes(blob.size)})`);
+      toast(`${label} exported (${formatBytes(blob.size)})`);
     } catch (err) {
       if (isAbortError(err)) {
         toast("Export cancelled");
@@ -318,6 +333,25 @@ export function Toolbar() {
       }
     } finally {
       endExport();
+    }
+  }
+
+  function handleExportWebM(presetId: VideoPresetId) {
+    const preset = resolveVideoPreset(presetId);
+    void runWebMExport(preset.label, {
+      fps: preset.fps,
+      videoBitsPerSecond: preset.videoBitsPerSecond,
+      targetHeight: preset.targetHeight,
+    });
+  }
+
+  async function openVideoDialog() {
+    setExportOpen(false);
+    try {
+      const img = await loadExportImage();
+      setVideoDialog({ w: img.naturalWidth, h: img.naturalHeight });
+    } catch {
+      // loadExportImage already toasted "Add an image first"
     }
   }
 
@@ -470,6 +504,10 @@ export function Toolbar() {
                 <VideoCamera size={14} />
                 <span>WebM High Quality</span>
               </button>
+              <button className="toolbar-dropdown-item" onClick={openVideoDialog}>
+                <VideoCamera size={14} />
+                <span>WebM Custom…</span>
+              </button>
             </div>
           </>
         )}
@@ -483,6 +521,19 @@ export function Toolbar() {
       <button className="toolbar-item" onClick={toggleTheme} title={lightMode ? "Dark mode" : "Light mode"}>
         {lightMode ? <Moon size={14} /> : <Sun size={14} />}
       </button>
+
+      {videoDialog && (
+        <ExportVideoDialog
+          open
+          onOpenChange={(open) => { if (!open) setVideoDialog(null); }}
+          imageWidth={videoDialog.w}
+          imageHeight={videoDialog.h}
+          durationSec={scene.playback.duration}
+          onExport={(opts) => {
+            void runWebMExport(`WebM ${opts.height}p${opts.fps}`, opts);
+          }}
+        />
+      )}
 
       <button className="toolbar-share" onClick={handleShare} disabled={sharing}>
         <Share size={14} style={{ marginRight: 6 }} />
