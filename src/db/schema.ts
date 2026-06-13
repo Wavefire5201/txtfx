@@ -10,6 +10,8 @@ export const scenes = pgTable("scenes", {
   imageHash: varchar("image_hash", { length: 64 }),
   // SHA-256 hash of (normalized scene JSON + image hash) — for share link dedup
   contentHash: varchar("content_hash", { length: 64 }),
+  // Public URL of a pre-rendered OG/social preview still (R2). Nullable.
+  ogImageUrl: text("og_image_url"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => ({
   imageHashIdx: index("scenes_image_hash_idx").on(table.imageHash),

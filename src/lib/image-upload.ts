@@ -71,47 +71,43 @@ export interface UploadResult {
   bytes: number;
 }
 
-/** Prepare and upload an image to R2. Handles dedup via hash. */
-export async function uploadImageToR2(imageUrl: string): Promise<UploadResult> {
-  // 1. Fetch and compress
-  const original = await urlToBlob(imageUrl);
-  const compressed = await compressImage(original);
-
-  // 2. Hash for dedup
-  const hash = await hashBlob(compressed);
-
-  // 3. Ask server for upload URL (or existing URL if hash already seen)
+/** Hash a blob, get a presigned URL (or reuse an existing object), PUT it. */
+export async function uploadBlobToR2(blob: Blob): Promise<UploadResult> {
+  const hash = await hashBlob(blob);
   const prepRes = await fetch("/api/upload-url", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      hash,
-      contentType: compressed.type,
-      size: compressed.size,
-    }),
+    body: JSON.stringify({ hash, contentType: blob.type, size: blob.size }),
   });
   if (!prepRes.ok) {
     const err = await prepRes.json().catch(() => ({ error: "Upload prepare failed" }));
     throw new Error(err.error || "Upload prepare failed");
   }
-  const { uploadUrl, publicUrl, existing } = await prepRes.json() as {
+  const { uploadUrl, publicUrl, existing } = (await prepRes.json()) as {
     uploadUrl?: string;
     publicUrl: string;
     existing: boolean;
   };
-
-  // 4. If not existing, PUT directly to R2
   if (!existing && uploadUrl) {
     const putRes = await fetch(uploadUrl, {
       method: "PUT",
-      headers: { "Content-Type": compressed.type },
-      body: compressed,
+      headers: { "Content-Type": blob.type },
+      body: blob,
     });
     if (!putRes.ok) {
       const text = await putRes.text().catch(() => "");
       throw new Error(`R2 upload failed: ${putRes.status} ${text}`);
     }
   }
+  return { publicUrl, hash, bytes: blob.size };
+}
 
-  return { publicUrl, hash, bytes: compressed.size };
+/** Prepare and upload an image to R2. Handles dedup via hash. */
+export async function uploadImageToR2(imageUrl: string): Promise<UploadResult> {
+  // 1. Fetch and compress
+  const original = await urlToBlob(imageUrl);
+  const compressed = await compressImage(original);
+
+  // 2-5. Hash, presign, PUT (shared with OG upload)
+  return uploadBlobToR2(compressed);
 }

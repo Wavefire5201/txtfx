@@ -26,7 +26,12 @@ Notes:
 - [x] Short link sharing via database (replace base64 URL hack)
 - [x] API routes: `POST /api/scenes` (create), `GET /api/scenes/[id]` (load)
 - [-] Legacy base64/hash sharing kept as a fallback compatibility path
-- [ ] Scene expiration (30-day TTL for anonymous, permanent for logged-in)
+- [x] Read-only viewer page (`/s/[id]` renders the player) + chrome-less `/embed/[id]` (iframe player, single DB read, no editor redirect)
+- [x] OG/Twitter social preview images (1200×630 still rendered at share time, stored in R2 + `og_image_url`)
+- [x] CORS + immutable caching on scene reads (`/api/scenes/[id]`) + R2 bucket GET CORS script — embed-ready
+- [x] Share imageless (pure-effect) scenes; collision-safe share-id generation
+- [x] Fixed: shared/imported scenes now restore their runtime mask (was silently dropped)
+- [-] Scene expiration (mechanism shipped, default-disabled via `SCENE_RETENTION_DAYS`; per-user permanence pending auth)
 
 ### Export Improvements
 - [x] Bundle real effect engine into HTML export (replace hand-written JS copies)
@@ -42,7 +47,7 @@ Notes:
 - [x] Transparent WebM (VP8/VP9 alpha) export — overlays for OBS / video editors (worker-based, WebM-only container, no MP4 fallback)
 - [ ] PNG image-sequence (zip) export for After Effects pipelines
 - [x] Animated APNG export (modern GIF replacement: full color + real alpha; dependency-free CompressionStream encoder). Animated WebP still open.
-- [ ] CDN-hosted versioned player (`txtfx-player.js`) + `<txtfx-scene>` web component + React wrapper (IntersectionObserver pause, reduced-motion, DPR/FPS caps — player runtime already supports these)
+- [ ] CDN-hosted versioned player (`txtfx-player.js`) + `<txtfx-scene>` web component + React wrapper (IntersectionObserver pause, reduced-motion, DPR/FPS caps — player runtime already supports these) — groundwork: `/embed/[id]` + CORS + scene-by-id read are now in place
 - [ ] OBS browser-source preset (transparent standalone HTML)
 - [ ] `npx txtfx` terminal screensaver / MOTD mode (terminal renderer already exists)
 - [ ] Sprite-sheet export for game engines
