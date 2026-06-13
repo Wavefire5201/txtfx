@@ -395,41 +395,43 @@ export function Toolbar() {
   async function handleShare() {
     if (sharing) return; // prevent double-clicks
     try {
-      if (!imageUrl) {
-        toast("Add an image first", "warning");
-        return;
-      }
-
       setSharing(true);
-      toast("Uploading image...");
 
-      // 1. Upload image to R2 (compresses + dedupes via hash)
-      let uploaded: { publicUrl: string; hash: string };
-      try {
-        uploaded = await uploadImageToR2(imageUrl);
-      } catch (err) {
-        console.error("Image upload failed:", err);
-        toast("Image upload failed", "warning");
-        return;
+      // Image is optional — pure-effect scenes can be shared too.
+      let uploadedImageUrl: string | null = null;
+      let uploadedImageHash: string | null = null;
+      if (imageUrl) {
+        toast("Uploading image...");
+        try {
+          const uploaded = await uploadImageToR2(imageUrl);
+          uploadedImageUrl = uploaded.publicUrl;
+          uploadedImageHash = uploaded.hash;
+        } catch (err) {
+          console.error("Image upload failed:", err);
+          toast("Image upload failed", "warning");
+          return;
+        }
       }
 
-      // Render a 1200x630 social preview from the live scene (best-effort).
+      // Render a 1200x630 social preview from the live scene (best-effort, needs image).
       let ogImageUrl: string | null = null;
-      try {
-        const img = await loadExportImage();
-        const currentMask = useEditorStore.getState().mask;
-        const dur = scene.playback?.duration ?? 10;
-        const ogBlob = await exportStillAuto(getExportScene(), img, currentMask, {
-          width: 1200,
-          height: 630,
-          time: Math.min(2, dur / 2),
-          type: "image/jpeg",
-          quality: 0.85,
-          transparent: false,
-        });
-        ogImageUrl = (await uploadBlobToR2(ogBlob)).publicUrl;
-      } catch (err) {
-        console.warn("OG preview render failed (continuing without it):", err);
+      if (imageUrl) {
+        try {
+          const img = await loadExportImage();
+          const currentMask = useEditorStore.getState().mask;
+          const dur = scene.playback?.duration ?? 10;
+          const ogBlob = await exportStillAuto(getExportScene(), img, currentMask, {
+            width: 1200,
+            height: 630,
+            time: Math.min(2, dur / 2),
+            type: "image/jpeg",
+            quality: 0.85,
+            transparent: false,
+          });
+          ogImageUrl = (await uploadBlobToR2(ogBlob)).publicUrl;
+        } catch (err) {
+          console.warn("OG preview render failed (continuing without it):", err);
+        }
       }
 
       // 2. Build scene without the embedded image data (R2 holds it now)
@@ -447,8 +449,8 @@ export function Toolbar() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           scene: sceneToShare,
-          imageUrl: uploaded.publicUrl,
-          imageHash: uploaded.hash,
+          imageUrl: uploadedImageUrl,
+          imageHash: uploadedImageHash,
           ogImageUrl,
         }),
       });
