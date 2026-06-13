@@ -174,6 +174,29 @@ export class Mask {
       img.src = dataUrl;
     });
   }
+
+  /** Load a mask from a base64 grayscale PNG, inferring width/height from the
+   * decoded image (shared scenes don't carry mask dimensions separately). */
+  static fromBase64Auto(dataUrl: string): Promise<Mask> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        const w = img.naturalWidth;
+        const h = img.naturalHeight;
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d")!;
+        ctx.drawImage(img, 0, 0);
+        const d = ctx.getImageData(0, 0, w, h).data;
+        const mask = new Mask(w, h);
+        for (let i = 0; i < mask.data.length; i++) mask.data[i] = d[i * 4];
+        resolve(mask);
+      };
+      img.onerror = reject;
+      img.src = dataUrl;
+    });
+  }
 }
 
 export class IncrementalMaskGrid implements MaskGrid {
