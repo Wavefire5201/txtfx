@@ -16,6 +16,7 @@ interface EditorState {
   updateAscii: (updates: Partial<SceneData["ascii"]>) => void;
   updateImage: (updates: Partial<SceneData["image"]>) => void;
   updatePlayback: (updates: Partial<SceneData["playback"]>) => void;
+  setSeed: (seed: number) => void;
 
   // Image
   imageUrl: string | null;
@@ -161,6 +162,8 @@ export const useEditorStore = create<EditorState>((set) => ({
     set((s) => ({ scene: { ...s.scene, image: { ...s.scene.image, ...updates } } })),
   updatePlayback: (updates) =>
     set((s) => ({ scene: { ...s.scene, playback: { ...s.scene.playback, ...updates } } })),
+  setSeed: (seed) =>
+    set((s) => ({ scene: { ...s.scene, seed: seed >>> 0 } })),
 
   imageUrl: null,
   setImageUrl: (url) => set({ imageUrl: url }),

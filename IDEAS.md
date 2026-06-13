@@ -46,7 +46,7 @@ Notes:
 - [ ] OBS browser-source preset (transparent standalone HTML)
 - [ ] `npx txtfx` terminal screensaver / MOTD mode (terminal renderer already exists)
 - [ ] Sprite-sheet export for game engines
-- [ ] Scene seed UI (reroll button / seed field — engine is fully seeded as of Phase 6)
+- [x] Scene seed UI (reroll button + seed field in Properties panel; engine seeded as of Phase 6)
 
 ### Native / Rust Track (deferred — pursue only if native targets become a product goal)
 - [ ] Rust + wgpu engine core compiled to native + WASM/WebGPU:

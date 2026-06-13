@@ -60,6 +60,7 @@ import {
   DotsSixVertical,
   X,
   ArrowCounterClockwise,
+  Shuffle,
 } from "@phosphor-icons/react";
 
 const ALL_EFFECT_TYPES: EffectType[] = [
@@ -275,6 +276,7 @@ export function PropertiesPanel() {
   const scene = useEditorStore((s) => s.scene);
   const updateAscii = useEditorStore((s) => s.updateAscii);
   const updateImage = useEditorStore((s) => s.updateImage);
+  const setSeed = useEditorStore((s) => s.setSeed);
   const addEffect = useEditorStore((s) => s.addEffect);
   const toggleEffect = useEditorStore((s) => s.toggleEffect);
   const removeEffect = useEditorStore((s) => s.removeEffect);
@@ -474,6 +476,31 @@ export function PropertiesPanel() {
             </>
           );
         })()}
+
+        <div className="prop-row" style={{ marginTop: 8 }}>
+          <span className="prop-label">Seed</span>
+          <span className="prop-value-group">
+            <input
+              className="prop-value prop-value--input"
+              type="text"
+              inputMode="numeric"
+              value={String(scene.seed ?? 1)}
+              onChange={(e) => {
+                const n = parseInt(e.target.value, 10);
+                if (!Number.isNaN(n)) setSeed(n);
+              }}
+              title="Random seed — same seed reproduces the same animation"
+            />
+            <button
+              className="prop-reset-btn"
+              title="Reroll seed"
+              aria-label="Reroll seed"
+              onClick={() => setSeed(Math.floor(Math.random() * 0xffffffff))}
+            >
+              <Shuffle size={11} />
+            </button>
+          </span>
+        </div>
       </div>
 
       <div className="panel-section panel-section--effects">
