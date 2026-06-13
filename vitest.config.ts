@@ -8,9 +8,6 @@ export default defineConfig({
       "@": resolve(__dirname, "src"),
     },
   },
-  // Use the automatic JSX runtime (matches Next) so .tsx components render in
-  // tests without importing React explicitly.
-  esbuild: { jsx: "automatic" },
   define: {
     // Set UPDATE_GOLDENS=1 to (re)write golden PNGs instead of diffing against them.
     __UPDATE_GOLDENS__: JSON.stringify(process.env.UPDATE_GOLDENS === "1"),
