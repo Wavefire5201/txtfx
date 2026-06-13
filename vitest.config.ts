@@ -11,6 +11,12 @@ export default defineConfig({
   define: {
     // Set UPDATE_GOLDENS=1 to (re)write golden PNGs instead of diffing against them.
     __UPDATE_GOLDENS__: JSON.stringify(process.env.UPDATE_GOLDENS === "1"),
+    // Pixel goldens are machine-specific (font/AA rendering differs across OSes),
+    // so skip the byte comparison in CI. GitHub Actions sets CI=true; locally the
+    // full comparison still runs. SKIP_GOLDENS=1 forces it off manually.
+    __SKIP_GOLDENS__: JSON.stringify(
+      process.env.CI === "true" || process.env.SKIP_GOLDENS === "1",
+    ),
   },
   test: {
     projects: [
