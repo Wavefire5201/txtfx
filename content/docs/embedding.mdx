@@ -3,15 +3,39 @@ title: Embedding
 description: Embed txtfx scenes in your website
 ---
 
-## Embed Snippet
+## Web component (recommended)
 
-Export an embed snippet to include your ASCII art scene in any website:
+Share a scene to get a short id, then drop it into any page with two lines:
+
+```html
+<script src="https://txtfx.app/v1/txtfx-scene.js" async></script>
+<txtfx-scene scene-id="abc12345" style="display:block;width:100%;aspect-ratio:16/9"></txtfx-scene>
+```
+
+The `<txtfx-scene>` element loads the scene in a sandboxed iframe from txtfx, so
+it always uses the latest renderer and never ships a heavy bundle to your page.
+Size it with normal CSS. Get the snippet from the **Embed** button on any shared
+scene page (`/s/<id>`), or build it yourself from the scene id.
+
+**Attributes**
+
+- `scene-id` — the short id of a shared scene. Resolves to `https://txtfx.app/embed/<id>`.
+- `src` — an explicit player URL (overrides `scene-id`).
+
+The embedded player pauses when off-screen or in a background tab, respects
+`prefers-reduced-motion`, and caps DPI/FPS for battery — no configuration needed.
+
+## Self-contained snippet (no account)
+
+To embed without sharing to txtfx, copy a fully inline snippet (scene data +
+renderer baked into a single `srcdoc` iframe):
 
 1. Click **Export** in the toolbar
 2. Choose **Copy Embed Snippet**
 3. Paste the HTML into your page
 
-The embed is a self-contained HTML snippet with inline CSS and JavaScript that recreates the ASCII effect animation.
+This needs no network calls but is larger and won't update with new renderer
+features.
 
 ## Standalone HTML
 
@@ -22,7 +46,3 @@ Export a full standalone HTML file that can be opened directly in any browser:
 3. Open the downloaded `.html` file
 
 The file includes the image, all effect settings, and the rendering engine.
-
-<Callout type="info">
-The standalone HTML export is being rebuilt to support all new features (multi-color effects, masks, etc.). Some effects may render differently in the export.
-</Callout>

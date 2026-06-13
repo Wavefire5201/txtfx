@@ -3,10 +3,11 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "predev": "bun run build:player",
+    "predev": "bun run build:player && bun run build:embed",
     "dev": "next dev --webpack",
     "build:player": "bun scripts/build-player.ts",
-    "build": "bun run build:player && next build",
+    "build:embed": "bun scripts/build-embed.ts",
+    "build": "bun run build:player && bun run build:embed && next build",
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run --project unit",
