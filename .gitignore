@@ -59,3 +59,6 @@ src/test/goldens/*.actual.png
 .playwright-mcp/
 .vitest-attachments/
 **/__screenshots__/
+
+# Generated embed player bundle
+/public/v1/txtfx-scene.js
