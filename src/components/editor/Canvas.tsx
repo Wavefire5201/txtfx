@@ -3,6 +3,7 @@
 import { useRef, useEffect, useLayoutEffect, useCallback, useState } from "react";
 import { useEditorStore, animationTime, pushMaskHistory } from "@/lib/store";
 import { loadState } from "@/lib/cache";
+import { applySharedScene } from "@/lib/apply-scene";
 import { Mask, IncrementalMaskGrid, type MaskDirtyRect } from "@/engine/mask";
 import { measureGrid, imageToAscii, sampleMeanColor } from "@/engine/ascii";
 import { createEffect } from "@/engine/effects";
@@ -111,10 +112,7 @@ export function Canvas() {
         fetch(`/api/scenes/${id}`)
           .then(r => r.json())
           .then(data => {
-            if (data.scene) {
-              useEditorStore.getState().setScene(data.scene);
-              if (data.scene.image?.data) useEditorStore.getState().setImageUrl(data.scene.image.data);
-            }
+            if (data.scene) applySharedScene(data.scene);
           })
           .catch(() => { /* failed to load shared scene */ });
         return;
@@ -126,11 +124,11 @@ export function Canvas() {
       const hash = window.location.hash;
       if (hash.startsWith("#scene=")) {
         const encoded = hash.slice(7);
-        const json = decodeURIComponent(escape(atob(encoded)));
+        const bytes = Uint8Array.from(atob(encoded), (c) => c.charCodeAt(0));
+        const json = new TextDecoder().decode(bytes);
         const data = JSON.parse(json);
         if (data.version) {
-          useEditorStore.getState().setScene(data);
-          if (data.image?.data) useEditorStore.getState().setImageUrl(data.image.data);
+          applySharedScene(data);
           window.history.replaceState(null, "", window.location.pathname);
           return; // Skip localStorage restore
         }
