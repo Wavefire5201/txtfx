@@ -800,6 +800,24 @@ export function Canvas() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playing, currentTime, grid, sceneEffects, useGl]);
 
+  // A seed reroll re-randomizes every effect's stream. Re-simulate to the
+  // current playhead so the preview updates in place — otherwise the effects
+  // snap back to their t=0 state (the rebuild effect re-inits them) and only
+  // "jump" to the correct frame on the next timeline scrub.
+  const prevSeedRef = useRef(sceneSeed);
+  useEffect(() => {
+    if (prevSeedRef.current === sceneSeed) return;
+    prevSeedRef.current = sceneSeed;
+    if (grid.cols <= 0 || effectsRef.current.length === 0) return;
+    const t = playing ? animationTime.current : currentTime;
+    simulateToTime(t);
+    lastRenderedTimeRef.current = t;
+    // When playing, the running tick() advances from this freshly-simulated
+    // state on its next frame; when paused, draw it now.
+    if (!playing) renderComposite(0, t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sceneSeed, grid, playing]);
+
   // Auto-play when effects are added
   useEffect(() => {
     if (sceneEffects.length > 0 && imageUrl && !playing) {

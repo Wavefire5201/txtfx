@@ -186,9 +186,23 @@ body {
   border: 1px solid var(--border-active);
   border-radius: var(--radius-lg);
   padding: 4px;
-  min-width: 200px;
+  min-width: 224px;
+  max-height: min(72vh, 560px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--bg-card) transparent;
   box-shadow: 0 8px 24px var(--shadow);
   animation: dropdown-in 0.12s ease-out;
+}
+
+.toolbar-dropdown-header {
+  padding: 7px 12px 3px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  user-select: none;
 }
 
 @keyframes dropdown-in {
@@ -206,9 +220,15 @@ body {
   border: none;
   color: var(--text);
   font-size: 12px;
+  text-align: left;
+  white-space: nowrap;
   cursor: pointer;
   border-radius: var(--radius);
   transition: background 0.12s, color 0.12s;
+}
+
+.toolbar-dropdown-item > svg {
+  flex-shrink: 0;
 }
 
 .toolbar-dropdown-item:hover:not(:disabled) {

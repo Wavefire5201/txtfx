@@ -499,6 +499,7 @@ export function Toolbar() {
           <>
             <div className="toolbar-dropdown-backdrop" onClick={() => setExportOpen(false)} />
             <div className="toolbar-dropdown">
+              <div className="toolbar-dropdown-header">Project</div>
               <button className="toolbar-dropdown-item" onClick={handleExportJSON}>
                 <FileArrowDown size={14} />
                 <span>Scene JSON (.txtfx)</span>
@@ -511,16 +512,20 @@ export function Toolbar() {
                 <Code size={14} />
                 <span>Copy embed snippet</span>
               </button>
+
               <div className="toolbar-dropdown-divider" />
+              <div className="toolbar-dropdown-header">Image</div>
               <button className="toolbar-dropdown-item" onClick={() => handleExportStill("standard")}>
                 <FileArrowDown size={14} />
                 <span>PNG Still (1080p)</span>
               </button>
               <button className="toolbar-dropdown-item" onClick={() => handleExportStill("transparent")}>
                 <FileArrowDown size={14} />
-                <span>Transparent overlay</span>
+                <span>PNG Transparent</span>
               </button>
+
               <div className="toolbar-dropdown-divider" />
+              <div className="toolbar-dropdown-header">Animated image</div>
               <button className="toolbar-dropdown-item" onClick={() => handleExportGif("preview")}>
                 <FilmStrip size={14} />
                 <span>GIF Preview (small)</span>
@@ -533,6 +538,17 @@ export function Toolbar() {
                 <FilmStrip size={14} />
                 <span>GIF Quality</span>
               </button>
+              <button className="toolbar-dropdown-item" onClick={() => handleExportApng("balanced")}>
+                <FilmStrip size={14} />
+                <span>APNG (full color)</span>
+              </button>
+              <button className="toolbar-dropdown-item" onClick={() => handleExportApng("transparent")}>
+                <FilmStrip size={14} />
+                <span>APNG Transparent</span>
+              </button>
+
+              <div className="toolbar-dropdown-divider" />
+              <div className="toolbar-dropdown-header">Video</div>
               <button className="toolbar-dropdown-item" onClick={() => handleExportWebM("balanced")}>
                 <VideoCamera size={14} />
                 <span>WebM Balanced</span>
@@ -543,20 +559,11 @@ export function Toolbar() {
               </button>
               <button className="toolbar-dropdown-item" onClick={() => handleExportWebM("transparent")}>
                 <VideoCamera size={14} />
-                <span>WebM Transparent (alpha)</span>
+                <span>WebM Transparent</span>
               </button>
               <button className="toolbar-dropdown-item" onClick={openVideoDialog}>
                 <VideoCamera size={14} />
                 <span>WebM Custom…</span>
-              </button>
-              <div className="toolbar-dropdown-divider" />
-              <button className="toolbar-dropdown-item" onClick={() => handleExportApng("balanced")}>
-                <FilmStrip size={14} />
-                <span>APNG (full color)</span>
-              </button>
-              <button className="toolbar-dropdown-item" onClick={() => handleExportApng("transparent")}>
-                <FilmStrip size={14} />
-                <span>APNG Transparent (alpha)</span>
               </button>
             </div>
           </>
