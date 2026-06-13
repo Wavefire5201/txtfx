@@ -95,8 +95,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ id: existing[0].id, url: `/s/${existing[0].id}`, deduped: true });
     }
 
-    const id = generateId();
-    await db.insert(scenes).values({ id, data, imageUrl, imageHash, contentHash, ogImageUrl });
+    let id = "";
+    let inserted = false;
+    for (let attempt = 0; attempt < 5 && !inserted; attempt++) {
+      id = generateId();
+      try {
+        await db.insert(scenes).values({ id, data, imageUrl, imageHash, contentHash, ogImageUrl });
+        inserted = true;
+      } catch (e) {
+        // Unique violation on the PK → regenerate and retry; rethrow anything else.
+        const code = (e as { code?: string })?.code;
+        if (code !== "23505") throw e;
+      }
+    }
+    if (!inserted) {
+      return NextResponse.json({ error: "Could not allocate a share id, try again" }, { status: 503 });
+    }
 
     return NextResponse.json({ id, url: `/s/${id}` });
   } catch (error) {
