@@ -30,6 +30,11 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      # player-bundle.ts and public/v1/txtfx-scene.js are generated + gitignored
+      # but imported by tests (html.ts/embed.ts) — generate before lint/test.
+      - name: Generate player bundles
+        run: bun run build:player && bun run build:embed
+
       - name: Lint
         run: bun run lint
 
