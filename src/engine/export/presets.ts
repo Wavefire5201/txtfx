@@ -1,5 +1,6 @@
 export type GifPresetId = "preview" | "balanced" | "quality";
-export type VideoPresetId = "balanced" | "high";
+export type VideoPresetId = "balanced" | "high" | "transparent";
+export type ApngPresetId = "balanced" | "transparent";
 export type StillPresetId = "standard" | "high" | "transparent";
 
 export interface GifExportPreset {
@@ -21,6 +22,18 @@ export interface VideoExportPreset {
   targetHeight: number;
   fps: number;
   videoBitsPerSecond: number;
+  /** Encode an alpha channel (VP8/VP9 side data, WebM container only). */
+  transparent?: boolean;
+}
+
+export interface ApngExportPreset {
+  id: ApngPresetId;
+  label: string;
+  targetHeight: number;
+  fps: number;
+  maxDuration: number;
+  /** Render over a transparent backdrop. */
+  transparent?: boolean;
 }
 
 export interface StillExportPreset {
@@ -84,6 +97,33 @@ export const VIDEO_EXPORT_PRESETS: Record<VideoPresetId, VideoExportPreset> = {
     fps: 30,
     videoBitsPerSecond: 8_000_000,
   },
+  transparent: {
+    id: "transparent",
+    label: "WebM Transparent",
+    targetHeight: 1080,
+    fps: 30,
+    videoBitsPerSecond: 8_000_000,
+    transparent: true,
+  },
+};
+
+export const APNG_EXPORT_PRESETS: Record<ApngPresetId, ApngExportPreset> = {
+  balanced: {
+    id: "balanced",
+    label: "APNG (full color)",
+    targetHeight: 480,
+    fps: 12,
+    maxDuration: 5,
+    transparent: false,
+  },
+  transparent: {
+    id: "transparent",
+    label: "APNG Transparent",
+    targetHeight: 480,
+    fps: 12,
+    maxDuration: 5,
+    transparent: true,
+  },
 };
 
 export const STILL_EXPORT_PRESETS: Record<StillPresetId, StillExportPreset> = {
@@ -114,6 +154,10 @@ export function resolveGifPreset(id: GifPresetId): GifExportPreset {
 
 export function resolveVideoPreset(id: VideoPresetId): VideoExportPreset {
   return VIDEO_EXPORT_PRESETS[id];
+}
+
+export function resolveApngPreset(id: ApngPresetId): ApngExportPreset {
+  return APNG_EXPORT_PRESETS[id];
 }
 
 export function resolveStillPreset(id: StillPresetId): StillExportPreset {

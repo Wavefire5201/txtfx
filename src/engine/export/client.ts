@@ -10,6 +10,7 @@
 import { Mask } from "../mask";
 import type { SceneData } from "../scene";
 import { exportGif, type GifExportOptions } from "./gif";
+import { exportApng, type ApngExportOptions } from "./apng";
 import {
   exportWebM,
   exportStillImage,
@@ -346,6 +347,7 @@ export async function exportWebMAuto(
         kind: "webm",
         fps: options.fps ?? 30,
         videoBitsPerSecond: options.videoBitsPerSecond ?? 3_000_000,
+        transparent: options.transparent,
       }),
     );
     _setLastExportPath("worker");
@@ -355,6 +357,33 @@ export async function exportWebMAuto(
     console.warn("[txtfx export] worker unavailable, exporting on main thread:", err.message);
     _setLastExportPath("main");
     return exportWebM(scene, image, mask, options);
+  }
+}
+
+export async function exportApngAuto(
+  scene: SceneData,
+  image: HTMLImageElement,
+  mask: Mask | null,
+  options: Omit<ApngExportOptions, "prepareOptions">,
+): Promise<Blob> {
+  try {
+    const { blob } = await runWorkerJob(
+      { scene, image, mask, ...pickCommon(options) },
+      (base) => ({
+        ...base,
+        kind: "apng",
+        fps: options.fps ?? 12,
+        maxDuration: options.maxDuration,
+        transparent: options.transparent,
+      }),
+    );
+    _setLastExportPath("worker");
+    return blob;
+  } catch (err) {
+    if (!(err instanceof WorkerUnavailableError)) throw err;
+    console.warn("[txtfx export] worker unavailable, exporting on main thread:", err.message);
+    _setLastExportPath("main");
+    return exportApng(scene, image, mask, options);
   }
 }
 

@@ -525,6 +525,12 @@ export interface VideoExportOptions {
   height: number;
   fps?: number;
   videoBitsPerSecond?: number;
+  /**
+   * Encode an alpha channel (transparent backdrop) as VP8/VP9 side data.
+   * Forces a WebM/Matroska container — MP4 cannot carry alpha side data, so
+   * there is no MP4 fallback in this mode.
+   */
+  transparent?: boolean;
   signal?: AbortSignal;
   onProgress?: (pct: number) => void;
   onMetrics?: (metrics: ExportMetrics) => void;
@@ -538,6 +544,7 @@ export async function exportWebM(
   options: VideoExportOptions,
 ): Promise<{ blob: Blob; ext: string }> {
   const { width, height, onProgress, signal } = options;
+  const transparent = options.transparent ?? false;
   throwIfAborted(signal);
   const ec = await prepareExportContext(scene, image, mask, width, height, options.prepareOptions);
   throwIfAborted(signal);
@@ -565,12 +572,14 @@ export async function exportWebM(
   } = await import("mediabunny");
 
   let outputFormat = new WebMOutputFormat();
+  // VP8/VP9 carry alpha as side data; only WebM/Matroska stores it. Transparent
+  // exports therefore stay on VP8/VP9 with no MP4 fallback.
   let codec = await getFirstEncodableVideoCodec(
     ["vp9", "vp8"],
     { width, height, bitrate },
   );
 
-  if (!codec) {
+  if (!codec && !transparent) {
     const mp4Format = new Mp4OutputFormat();
     codec = await getFirstEncodableVideoCodec(
       mp4Format.getSupportedVideoCodecs(),
@@ -580,12 +589,20 @@ export async function exportWebM(
   }
 
   if (!codec) {
-    throw new Error("No supported video codec found in this browser");
+    throw new Error(
+      transparent
+        ? "No alpha-capable VP8/VP9 encoder available in this browser"
+        : "No supported video codec found in this browser",
+    );
   }
 
   const target = new BufferTarget();
   const output = new Output({ format: outputFormat, target });
-  const videoSource = new CanvasSource(ec.canvas, { codec, bitrate });
+  const videoSource = new CanvasSource(ec.canvas, {
+    codec,
+    bitrate,
+    ...(transparent ? { alpha: "keep" as const } : {}),
+  });
   output.addVideoTrack(videoSource);
 
   const ext = outputFormat.fileExtension.slice(1);
@@ -596,7 +613,7 @@ export async function exportWebM(
 
     for (let f = 0; f < totalFrames; f++) {
       throwIfAborted(signal);
-      renderFrame(ec, getFrameDelta(f, fps), getFrameTime(f, fps));
+      renderFrame(ec, getFrameDelta(f, fps), getFrameTime(f, fps), { transparent });
       // Scene timestamps — not wall-clock. MediaRecorder stretches duration when frames render slowly.
       await videoSource.add(getFrameTime(f, fps), frameDuration);
       onProgress?.((f + 1) / totalFrames);

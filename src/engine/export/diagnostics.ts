@@ -1,4 +1,4 @@
-export type ExportFormat = "png" | "jpeg" | "gif" | "webm" | "mp4" | "frames" | "text" | "ansi";
+export type ExportFormat = "png" | "jpeg" | "gif" | "webm" | "mp4" | "apng" | "frames" | "text" | "ansi";
 
 export interface ExportCostInput {
   width: number;

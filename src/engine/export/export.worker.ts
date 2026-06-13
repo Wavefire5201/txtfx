@@ -6,6 +6,7 @@
 import { Mask } from "../mask";
 import { exportGif } from "./gif";
 import { exportWebM, exportStillImage } from "./video";
+import { exportApng } from "./apng";
 import type { ExportMetrics } from "./diagnostics";
 import type { ToWorker, FromWorker, ExportJob, WorkerFontPayload, WorkerCaps } from "./worker-protocol";
 
@@ -114,10 +115,21 @@ async function runJob(job: ExportJob): Promise<void> {
         height: job.height,
         fps: job.fps,
         videoBitsPerSecond: job.videoBitsPerSecond,
+        transparent: job.transparent,
         ...common,
       });
       blob = result.blob;
       ext = result.ext;
+    } else if (job.kind === "apng") {
+      blob = await exportApng(job.scene, image, mask, {
+        width: job.width,
+        height: job.height,
+        fps: job.fps,
+        maxDuration: job.maxDuration,
+        transparent: job.transparent,
+        ...common,
+      });
+      ext = "png";
     } else {
       blob = await exportStillImage(job.scene, image, mask, {
         width: job.width,

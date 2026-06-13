@@ -54,6 +54,14 @@ export interface WebmJob extends BaseJob {
   kind: "webm";
   fps: number;
   videoBitsPerSecond: number;
+  transparent?: boolean;
+}
+
+export interface ApngJob extends BaseJob {
+  kind: "apng";
+  fps: number;
+  maxDuration?: number;
+  transparent?: boolean;
 }
 
 export interface GifJob extends BaseJob {
@@ -74,7 +82,7 @@ export interface StillJob extends BaseJob {
   transparent?: boolean;
 }
 
-export type ExportJob = WebmJob | GifJob | StillJob;
+export type ExportJob = WebmJob | GifJob | StillJob | ApngJob;
 
 export type ToWorker =
   | { type: "job"; job: ExportJob }

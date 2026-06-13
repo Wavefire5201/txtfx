@@ -5,12 +5,14 @@ import Link from "next/link";
 import { useEditorStore } from "@/lib/store";
 import { exportStandaloneHTML } from "@/engine/export/html";
 import { exportEmbedSnippet } from "@/engine/export/embed";
-import { exportGifAuto, exportStillAuto, exportWebMAuto } from "@/engine/export/client";
+import { exportApngAuto, exportGifAuto, exportStillAuto, exportWebMAuto } from "@/engine/export/client";
 import {
+  resolveApngPreset,
   resolveGifPreset,
   resolveStillPreset,
   resolveVideoPreset,
   computeVideoDimensions,
+  type ApngPresetId,
   type GifPresetId,
   type StillPresetId,
   type VideoPresetId,
@@ -301,6 +303,7 @@ export function Toolbar() {
     width?: number;
     height?: number;
     targetHeight?: number;
+    transparent?: boolean;
   }
 
   async function runWebMExport(label: string, opts: WebMRunOptions) {
@@ -318,6 +321,7 @@ export function Toolbar() {
         height,
         fps: opts.fps,
         videoBitsPerSecond: opts.videoBitsPerSecond,
+        transparent: opts.transparent,
         signal: controller.signal,
         onProgress: (pct) => setExportProgress(Math.round(pct * 100)),
         onMetrics: logExportMetrics,
@@ -342,7 +346,40 @@ export function Toolbar() {
       fps: preset.fps,
       videoBitsPerSecond: preset.videoBitsPerSecond,
       targetHeight: preset.targetHeight,
+      transparent: preset.transparent,
     });
+  }
+
+  async function handleExportApng(presetId: ApngPresetId) {
+    const preset = resolveApngPreset(presetId);
+    const controller = beginExport();
+    await new Promise((r) => setTimeout(r, 0));
+    try {
+      const img = await loadExportImage();
+      const { width, height } = targetSize(img, preset.targetHeight);
+      const currentMask = useEditorStore.getState().mask;
+      const blob = await exportApngAuto(getExportScene(), img, currentMask, {
+        width,
+        height,
+        fps: preset.fps,
+        maxDuration: preset.maxDuration,
+        transparent: preset.transparent,
+        signal: controller.signal,
+        onProgress: (pct) => setExportProgress(Math.round(pct * 100)),
+        onMetrics: logExportMetrics,
+      });
+      downloadBlob(blob, `txtfx-${new Date().toISOString().slice(0, 10)}.png`);
+      toast(`${preset.label} exported (${formatBytes(blob.size)})`);
+    } catch (err) {
+      if (isAbortError(err)) {
+        toast("Export cancelled");
+      } else if ((err as Error).message !== "Missing image") {
+        console.error("APNG export failed:", err);
+        toast("APNG export failed", "warning");
+      }
+    } finally {
+      endExport();
+    }
   }
 
   async function openVideoDialog() {
@@ -504,9 +541,22 @@ export function Toolbar() {
                 <VideoCamera size={14} />
                 <span>WebM High Quality</span>
               </button>
+              <button className="toolbar-dropdown-item" onClick={() => handleExportWebM("transparent")}>
+                <VideoCamera size={14} />
+                <span>WebM Transparent (alpha)</span>
+              </button>
               <button className="toolbar-dropdown-item" onClick={openVideoDialog}>
                 <VideoCamera size={14} />
                 <span>WebM Custom…</span>
+              </button>
+              <div className="toolbar-dropdown-divider" />
+              <button className="toolbar-dropdown-item" onClick={() => handleExportApng("balanced")}>
+                <FilmStrip size={14} />
+                <span>APNG (full color)</span>
+              </button>
+              <button className="toolbar-dropdown-item" onClick={() => handleExportApng("transparent")}>
+                <FilmStrip size={14} />
+                <span>APNG Transparent (alpha)</span>
               </button>
             </div>
           </>

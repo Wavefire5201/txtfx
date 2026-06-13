@@ -39,9 +39,9 @@ Notes:
 - [ ] Wallpaper Engine web-wallpaper export (project.json package; Steam Workshop distribution) — the standalone HTML is ~90% of it
 - [ ] Lively Wallpaper (Windows) / Plash (macOS) compatibility notes + docs page
 - [ ] Perfect-loop helper for wallpaper/video exports (crossfade or simulate-to-loop-point so loops don't pop)
-- [ ] Transparent WebM (VP9 alpha) export — overlays for OBS / video editors
+- [x] Transparent WebM (VP8/VP9 alpha) export — overlays for OBS / video editors (worker-based, WebM-only container, no MP4 fallback)
 - [ ] PNG image-sequence (zip) export for After Effects pipelines
-- [ ] Animated WebP / APNG export (modern GIF replacement: full color + real alpha)
+- [x] Animated APNG export (modern GIF replacement: full color + real alpha; dependency-free CompressionStream encoder). Animated WebP still open.
 - [ ] CDN-hosted versioned player (`txtfx-player.js`) + `<txtfx-scene>` web component + React wrapper (IntersectionObserver pause, reduced-motion, DPR/FPS caps — player runtime already supports these)
 - [ ] OBS browser-source preset (transparent standalone HTML)
 - [ ] `npx txtfx` terminal screensaver / MOTD mode (terminal renderer already exists)
