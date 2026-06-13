@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { webComponentSnippet } from "@/player/embed-url";
 
 export interface SceneViewerProps {
   /** Full standalone-player HTML document (from exportStandaloneHTML). */
@@ -17,9 +18,7 @@ export function SceneViewer({ html, id, chrome = true }: SceneViewerProps) {
   function copy(kind: "link" | "embed") {
     const origin = window.location.origin;
     const text =
-      kind === "link"
-        ? `${origin}/s/${id}`
-        : `<iframe src="${origin}/embed/${id}" style="width:100%;height:100%;border:0" allowfullscreen></iframe>`;
+      kind === "link" ? `${origin}/s/${id}` : webComponentSnippet(id, origin);
     navigator.clipboard.writeText(text).then(() => {
       setCopied(kind);
       setTimeout(() => setCopied(""), 1500);
