@@ -1,5 +1,6 @@
 /** Idempotent: add the og_image_url column. Run: bun scripts/db-add-og-column.ts */
-import "dotenv/config";
+import { config } from "dotenv";
+config({ path: [".env.local", ".env"] });
 import { neon } from "@neondatabase/serverless";
 
 const url = process.env.DATABASE_URL;

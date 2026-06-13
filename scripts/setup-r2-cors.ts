@@ -3,9 +3,13 @@
  * player can read pixels (getImageData) from cross-origin image URLs without
  * tainting the canvas. Run with: bun scripts/setup-r2-cors.ts
  */
-import "dotenv/config";
-import { PutBucketCorsCommand } from "@aws-sdk/client-s3";
-import { r2, BUCKET } from "../src/lib/r2";
+import { config } from "dotenv";
+config({ path: [".env.local", ".env"] });
+
+// Dynamic imports AFTER dotenv loads — src/lib/r2.ts reads R2_* env at import
+// time, so a static import (hoisted above config()) would capture empty vars.
+const { PutBucketCorsCommand } = await import("@aws-sdk/client-s3");
+const { r2, BUCKET } = await import("../src/lib/r2");
 
 if (!BUCKET) {
   console.error("R2 not configured (missing env vars). Aborting.");
