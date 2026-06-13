@@ -80,6 +80,7 @@ export async function POST(request: Request) {
 
     const imageUrl = typeof body.imageUrl === "string" ? body.imageUrl : null;
     const imageHash = typeof body.imageHash === "string" ? body.imageHash : null;
+    const ogImageUrl = typeof body.ogImageUrl === "string" ? body.ogImageUrl : null;
 
     // Dedup: compute hash of normalized scene + image hash, check for existing record
     const contentHash = computeContentHash(normalizedJson, imageHash);
@@ -95,7 +96,7 @@ export async function POST(request: Request) {
     }
 
     const id = generateId();
-    await db.insert(scenes).values({ id, data, imageUrl, imageHash, contentHash });
+    await db.insert(scenes).values({ id, data, imageUrl, imageHash, contentHash, ogImageUrl });
 
     return NextResponse.json({ id, url: `/s/${id}` });
   } catch (error) {
