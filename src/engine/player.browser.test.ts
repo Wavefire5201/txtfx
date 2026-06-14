@@ -72,6 +72,12 @@ describe("standalone player loop discipline", () => {
 
     // Base text was generated and playback is running
     expect(doc.getElementById("A")?.textContent?.length ?? 0).toBeGreaterThan(100);
+
+    // Grid is centered in the container (symmetric padding), so the ASCII lines
+    // up with the center-cropped backdrop rather than anchoring top-left.
+    const a = doc.getElementById("A") as HTMLElement;
+    expect(a.style.paddingLeft).toBe(a.style.paddingRight);
+    expect(a.style.paddingTop).toBe(a.style.paddingBottom);
     // GL mode engaged in this chromium (WebGL2 available): GL canvas sized, pres hidden
     const glc = doc.getElementById("GLC") as HTMLCanvasElement | null;
     expect(glc).not.toBeNull();
