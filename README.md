@@ -53,7 +53,8 @@ CI (GitHub Actions) runs lint + unit + browser + build on every PR.
 Short links, OG previews, and the `<txtfx-scene>` embed need a database and image bucket:
 
 - `DATABASE_URL` — Neon Postgres (schema in `src/db/schema.ts`; push with `bunx drizzle-kit push`)
-- `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, `NEXT_PUBLIC_R2_PUBLIC_URL` — Cloudflare R2
+- `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME` — Cloudflare R2 (used server-side for presigned uploads)
+- `NEXT_PUBLIC_R2_PUBLIC_URL` — the bucket's **public** base URL where shared images are read from: a custom domain (recommended, e.g. `https://cdn.example.com`) or the r2.dev managed URL (`https://pub-<hash>.r2.dev`). **Not** the S3 API endpoint (`*.r2.cloudflarestorage.com` — that only serves signed requests, so public reads 400). Baked in at build time, so redeploy after changing it.
 
 Apply a CORS policy to the bucket so the editor can upload images (browser `PUT`) and cross-origin embeds can read them — via the Cloudflare dashboard (R2 → bucket → Settings → CORS Policy) or `wrangler r2 bucket cors set <bucket> --file cors.json`:
 
