@@ -64,7 +64,7 @@ declare const SCENE: {
   }
 
   // Measure grid
-  let cols = 80, rows = 40, charW = 6, charH = 9, fontSize = 12;
+  let cols = 80, rows = 40, charW = 6, charH = 9, fontSize = 12, padX = 0, padY = 0;
   function measure() {
     const style = getComputedStyle(A);
     const fs = parseFloat(style.fontSize);
@@ -82,8 +82,14 @@ declare const SCENE: {
     document.body.removeChild(span);
     charH = parseFloat(style.lineHeight) || fs * 0.78;
     const rect = A.getBoundingClientRect();
-    cols = Math.floor((rect.width - 16) / charW);
-    rows = Math.floor((rect.height - 18) / charH);
+    cols = Math.floor(rect.width / charW);
+    rows = Math.floor(rect.height / charH);
+    // Center the grid in the container (matches the editor + export) so the ASCII
+    // lines up with the center-cropped backdrop instead of anchoring top-left.
+    padX = (rect.width - cols * charW) / 2;
+    padY = (rect.height - rows * charH) / 2;
+    A.style.padding = `${padY}px ${padX}px`;
+    F.style.padding = `${padY}px ${padX}px`;
   }
 
   // Build ASCII from image
@@ -177,6 +183,7 @@ declare const SCENE: {
 
   function initEffects() {
     grid.cols = cols; grid.rows = rows; grid.charW = charW; grid.charH = charH; grid.fontSize = fontSize;
+    grid.padX = padX; grid.padY = padY;
     activeEffects = [];
     for (let i = 0; i < SCENE.effects.length; i++) {
       const cfg = SCENE.effects[i];
@@ -215,8 +222,8 @@ declare const SCENE: {
   function refreshLayoutCache() {
     const style = getComputedStyle(A);
     glyphFont = style.font || `${fontSize}px ${SCENE.ascii.fontFamily}`;
-    padLeft = parseFloat(style.paddingLeft) || 8;
-    padTop = parseFloat(style.paddingTop) || 10;
+    padLeft = padX;
+    padTop = padY;
   }
 
   let baseCodes: Uint32Array | null = null;
