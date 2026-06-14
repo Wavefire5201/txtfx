@@ -28,7 +28,7 @@ Notes:
 - [-] Legacy base64/hash sharing kept as a fallback compatibility path
 - [x] Read-only viewer page (`/s/[id]` renders the player) + chrome-less `/embed/[id]` (iframe player, single DB read, no editor redirect)
 - [x] OG/Twitter social preview images (1200×630 still rendered at share time, stored in R2 + `og_image_url`)
-- [x] CORS + immutable caching on scene reads (`/api/scenes/[id]`) + R2 bucket GET CORS script — embed-ready
+- [x] CORS + immutable caching on scene reads (`/api/scenes/[id]`); R2 bucket GET CORS applied via dashboard/wrangler — embed-ready
 - [x] Share imageless (pure-effect) scenes; collision-safe share-id generation
 - [x] Fixed: shared/imported scenes now restore their runtime mask (was silently dropped)
 - [-] Scene expiration (mechanism shipped, default-disabled via `SCENE_RETENTION_DAYS`; per-user permanence pending auth)
