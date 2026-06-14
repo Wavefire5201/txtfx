@@ -123,6 +123,8 @@ Notes:
 ---
 
 ## Technical Debt / Architecture
+- [ ] Migrate deprecated `@phosphor-icons/react` icon imports (the current type set flags every icon import as deprecated — noisy diagnostics)
+- [ ] Polish light mode (contrast/spacing pass)
 - [ ] Migrate `editor.css` to hybrid Tailwind — keep CSS variables + grid layout in a slim CSS file, move component-level styles (buttons, panels, inputs, spacing) to Tailwind utility classes in JSX
 - [ ] Mask coordinate alignment (center-crop mismatch between ASCII and mask)
 - [ ] Export masking support in HTML runtime

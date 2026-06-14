@@ -8,8 +8,8 @@
 
 - Run tests with `bun run test` (unit, node) and `bun run test:browser` (golden/pixel tests in real Chromium via vitest browser mode). `bun run test:all` runs both.
 - **Never use bare `bun test`** — it invokes bun's own test runner, which lacks vitest APIs and cannot run browser tests.
-- Golden PNGs live in `src/test/goldens/`. A failing golden writes `<name>.actual.png` beside it for comparison. If a visual change is intentional, regenerate with `UPDATE_GOLDENS=1 bun run test:browser` and eyeball the diff before committing.
-- Effects are Math.random-driven (until the seeded-effects refactor lands): reproducible tests must wrap effect init/update with `seedMathRandom()` from `src/test/fixtures.ts`.
+- Golden PNGs live in `src/test/goldens/`. A failing golden writes `<name>.actual.png` beside it for comparison. If a visual change is intentional, regenerate with `UPDATE_GOLDENS=1 bun run test:browser` and eyeball the diff before committing. Pixel goldens are machine-specific (font/AA rendering varies across OSes), so the byte comparison is **skipped in CI** (`CI=true`, or `SKIP_GOLDENS=1`) and enforced locally — see `__SKIP_GOLDENS__` in `src/test/pixel.ts`.
+- Effects are **seeded** and never call Math.random (see the Determinism contract below): same seed + update sequence ⇒ identical frames. `seedMathRandom()` from `src/test/fixtures.ts` remains only for tests exercising incidental, non-seeded randomness.
 
 ## Effect Engine Conventions
 
@@ -57,6 +57,9 @@ init(grid: GridInfo, params: Record<string, unknown>): void {
 
 ### Rendering architecture
 
+The default path is a **WebGL2 instanced glyph-atlas renderer** (`src/engine/gl/`) — one canvas draws the backdrop, base glyphs, glow, and effect glyphs, shared by editor, player, and export. The DOM/Canvas2D path below is the fallback when WebGL2 is unavailable and remains the visual-regression oracle.
+
+Canvas2D / DOM fallback:
 - Static ASCII: DOM `<pre>` element (z-index 2)
 - Effect text overlay: second DOM `<pre>` with identical CSS for ALL effect characters (z-index 3) — pixel-perfect alignment via same text layout engine. Optimized with batched spaces and sparse spans.
 - Glow sprites: `<canvas>` for radial gradient blobs (z-index 4)
