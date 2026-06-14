@@ -55,4 +55,8 @@ Short links, OG previews, and the `<txtfx-scene>` embed need a database and imag
 - `DATABASE_URL` — Neon Postgres (schema in `src/db/schema.ts`; push with `bunx drizzle-kit push`)
 - `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, `NEXT_PUBLIC_R2_PUBLIC_URL` — Cloudflare R2
 
-Apply a GET CORS policy to the bucket (dashboard, `wrangler r2 bucket cors set`, or `bun scripts/setup-r2-cors.ts` with an admin token) so cross-origin embeds can read image pixels.
+Apply a GET CORS policy to the bucket so cross-origin embeds can read image pixels — via the Cloudflare dashboard (R2 → bucket → Settings → CORS Policy) or `wrangler r2 bucket cors set <bucket> --file cors.json`:
+
+```json
+[{ "AllowedOrigins": ["*"], "AllowedMethods": ["GET", "HEAD"], "AllowedHeaders": ["*"], "ExposeHeaders": ["Content-Length", "Content-Type"], "MaxAgeSeconds": 86400 }]
+```
