@@ -55,8 +55,13 @@ Short links, OG previews, and the `<txtfx-scene>` embed need a database and imag
 - `DATABASE_URL` — Neon Postgres (schema in `src/db/schema.ts`; push with `bunx drizzle-kit push`)
 - `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`, `NEXT_PUBLIC_R2_PUBLIC_URL` — Cloudflare R2
 
-Apply a GET CORS policy to the bucket so cross-origin embeds can read image pixels — via the Cloudflare dashboard (R2 → bucket → Settings → CORS Policy) or `wrangler r2 bucket cors set <bucket> --file cors.json`:
+Apply a CORS policy to the bucket so the editor can upload images (browser `PUT`) and cross-origin embeds can read them — via the Cloudflare dashboard (R2 → bucket → Settings → CORS Policy) or `wrangler r2 bucket cors set <bucket> --file cors.json`:
 
 ```json
-[{ "AllowedOrigins": ["*"], "AllowedMethods": ["GET", "HEAD"], "AllowedHeaders": ["*"], "ExposeHeaders": ["Content-Length", "Content-Type"], "MaxAgeSeconds": 86400 }]
+[
+  { "AllowedOrigins": ["*"], "AllowedMethods": ["GET", "HEAD"], "AllowedHeaders": ["*"], "ExposeHeaders": ["Content-Length", "Content-Type"], "MaxAgeSeconds": 86400 },
+  { "AllowedOrigins": ["https://your-app-domain", "http://localhost:3000"], "AllowedMethods": ["PUT"], "AllowedHeaders": ["*"], "MaxAgeSeconds": 86400 }
+]
 ```
+
+The first rule lets any site display shared images (embeds); the second lets your editor upload via presigned `PUT` — replace the origins with your deployment URL(s).
