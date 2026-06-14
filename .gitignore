@@ -62,3 +62,10 @@ src/test/goldens/*.actual.png
 
 # Generated embed player bundle
 /public/v1/txtfx-scene.js
+
+# Never track superpowers plan artifacts (local-only process docs)
+docs/superpowers/
+
+# Local scratch todo (use IDEAS.md for tracked backlog)
+/todo.md
+/TODO.md
